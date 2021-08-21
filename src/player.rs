@@ -42,7 +42,7 @@ pub fn player_movement_system(
 pub fn setup_player(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut rapier_config: ResMut<RapierConfiguration>,
+    rapier_config: Res<RapierConfiguration>,
     asset_server: Res<AssetServer>,
 ) {
     // Load sprite
@@ -51,7 +51,6 @@ pub fn setup_player(
     let sprite_size_x = 40.0;
     let sprite_size_y = 40.0;
 
-    rapier_config.scale = 40.0;
     let collider_size_x = sprite_size_x / rapier_config.scale;
     let collider_size_y = sprite_size_y / rapier_config.scale;
 

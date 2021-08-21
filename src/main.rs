@@ -6,6 +6,7 @@ use bevy_rapier2d::prelude::*;
 use nalgebra::Vector2;
 
 mod player;
+mod level;
 
 fn main() {
     App::build()
@@ -21,8 +22,9 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
-        .add_startup_system(setup.system())
-        .add_startup_system(player::setup_player.system())
+        .add_startup_system(setup.system().label("physics"))
+        .add_startup_system(player::setup_player.system().after("physics"))
+        .add_startup_system(level::setup_environment.system().after("physics"))
         .add_system(player::player_movement_system.system())
         .run();
 }
@@ -37,6 +39,6 @@ fn setup(
     commands.spawn_bundle(UiCameraBundle::default());
 
     // Configure Physics
-    rapier_config.scale = 100.0;
+    rapier_config.scale = 40.0;
     rapier_config.gravity = Vector2::zeros();
 }
