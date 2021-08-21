@@ -2,6 +2,8 @@ use bevy::{
     prelude::*, 
     window::WindowMode
 };
+use bevy_rapier2d::prelude::*;
+use nalgebra::Vector2;
 
 mod player;
 
@@ -17,8 +19,10 @@ fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
         .add_startup_system(setup.system())
+        .add_startup_system(player::setup_player.system())
         .add_system(player::player_movement_system.system())
         .run();
 }
@@ -26,23 +30,13 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    asset_server: Res<AssetServer>,
+    mut rapier_config: ResMut<RapierConfiguration>,
 ) {
-    // Load sprites
-    let circle_texture_handle: Handle<Texture> = asset_server.load("sprites/circle.png");
-
     // Spawn cameras
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands.spawn_bundle(UiCameraBundle::default());
 
-    // Create an object with a sprite to be the player
-    commands
-        .spawn_bundle(SpriteBundle {
-            material: materials.add(circle_texture_handle.into()),
-            transform: Transform::from_xyz(0.0, -215.0, 0.0),
-            sprite: Sprite::new(Vec2::new(30.0, 30.0)),
-            ..Default::default()
-        })
-        .insert(player::PlayerMovement {speed: 100.0});
+    // Configure Physics
+    rapier_config.scale = 100.0;
+    rapier_config.gravity = Vector2::zeros();
 }

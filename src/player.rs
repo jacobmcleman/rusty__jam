@@ -1,19 +1,19 @@
-use bevy::{
-    prelude::*, 
-};
+use bevy::prelude::*;
+use bevy_rapier2d::prelude::*;
+use nalgebra::{Vector2, vector};
 
 pub struct PlayerMovement {
     pub speed: f32,
 }
 
 pub fn player_movement_system(
-    time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
-    mut query: Query<(&PlayerMovement, &mut Transform)>
+    rapier_parameters: Res<RapierConfiguration>,
+    mut query: Query<(&PlayerMovement, &mut RigidBodyVelocity)>
 ) {
-    if let Ok((player, mut transform)) = query.single_mut() {
-        let mut y_movement: f32 = 0.0;
-        let mut x_movement: f32 = 0.0; 
+    if let Ok((player, mut rb_vels)) = query.single_mut() {
+        let mut y_movement = 0.0;
+        let mut x_movement = 0.0; 
         if keyboard_input.pressed(KeyCode::W) {
             y_movement += 1.0;
         }
@@ -27,11 +27,46 @@ pub fn player_movement_system(
             x_movement += 1.0;
         }
 
-        let translation = &mut transform.translation;
-        translation.x += time.delta_seconds() * x_movement * player.speed;
-        translation.y += time.delta_seconds() * y_movement * player.speed;
+        let mut movement = vector![x_movement, y_movement];
+        if movement != Vector2::zeros() 
+        {
+            movement = movement.normalize() * (1.0 / rapier_parameters.scale) * player.speed;
+        }
 
-        translation.x = translation.x.min(380.0).max(-380.0);
-        translation.y = translation.y.min(380.0).max(-380.0);
+        rb_vels.linvel = movement;
+
+        //println!("Moving ({}, {}) based on input ({}, {}", movement.x, movement.y, x_movement, y_movement);
     }
+}
+
+pub fn setup_player(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut rapier_config: ResMut<RapierConfiguration>,
+    asset_server: Res<AssetServer>,
+) {
+    // Load sprite
+    let circle_texture_handle: Handle<Texture> = asset_server.load("sprites/circle.png");
+
+    let sprite_size_x = 40.0;
+    let sprite_size_y = 40.0;
+
+    rapier_config.scale = 40.0;
+    let collider_size_x = sprite_size_x / rapier_config.scale;
+    let collider_size_y = sprite_size_y / rapier_config.scale;
+
+    commands
+    .spawn()
+    .insert_bundle(SpriteBundle {
+        material: materials.add(circle_texture_handle.into()),
+        sprite: Sprite::new(Vec2::new(sprite_size_x, sprite_size_y)),
+        ..Default::default()
+    })
+    .insert_bundle(RigidBodyBundle::default())
+    .insert_bundle(ColliderBundle {
+        position: [collider_size_x / 2.0, collider_size_y / 2.0].into(),
+        ..Default::default()
+    })
+    .insert(ColliderPositionSync::Discrete)
+    .insert(PlayerMovement {speed: 200.0});
 }
