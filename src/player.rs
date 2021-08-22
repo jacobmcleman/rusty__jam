@@ -98,6 +98,7 @@ pub fn setup_player(
     })
     .insert_bundle(ColliderBundle {
         position: [collider_size_x / 2.0, collider_size_y / 2.0].into(),
+        shape: ColliderShape::ball(collider_size_x * 0.5),
         ..Default::default()
     })
     .insert(ColliderPositionSync::Discrete)

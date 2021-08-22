@@ -85,7 +85,10 @@ fn gen_level_tiles(width: usize, height: usize) -> LevelTiles {
     let mut tiles = Vec::<TileValue>::new();
     for y in 0..height {
         for x in 0..width {
-            tiles.push(if (x * y) % 3 == 1 || x * y == 0 {TileValue::Wall} else {TileValue::Empty});
+            tiles.push(
+                if (x * y) % 4 == 1 || x * y == 0 || x == width - 1 || y == height - 1 {TileValue::Wall} 
+                else {TileValue::Empty}
+            );
         }
     }
     LevelTiles { width, height, tiles }
