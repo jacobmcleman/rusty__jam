@@ -92,7 +92,10 @@ pub fn setup_player(
         sprite: Sprite::new(Vec2::new(sprite_size_x, sprite_size_y)),
         ..Default::default()
     })
-    .insert_bundle(RigidBodyBundle::default())
+    .insert_bundle(RigidBodyBundle {
+        mass_properties: RigidBodyMassPropsFlags::ROTATION_LOCKED.into(),
+        ..Default::default()
+    })
     .insert_bundle(ColliderBundle {
         position: [collider_size_x / 2.0, collider_size_y / 2.0].into(),
         ..Default::default()
