@@ -12,6 +12,10 @@ pub struct ContinuousParticleEmitter {
     pub emit_fractional_build: f32,
 }
 
+pub struct BurstParticleEmitter {
+    pub quantity: i32,
+}
+
 pub struct ParticleEmissionParams {
     pub speed_min: f32,
     pub speed_max: f32,
@@ -28,24 +32,20 @@ pub fn particle_emission_system(
     mut query: Query<(&mut ContinuousParticleEmitter, &ParticleEmissionParams, &Transform)>
 ) {
     for (mut emitter, params, transform) in query.iter_mut() {
-        let mut to_emit = emitter.rate * time.delta_seconds() + emitter.emit_fractional_build;
-        let mut rng = rand::thread_rng();
-        while to_emit > 1.0 {
-            let angle = rng.gen_range(0.0..(2.0 * std::f32::consts::PI));
-            let direction = Vec2::new(f32::sin(angle), f32::cos(angle));
-            let emit_vel = direction * rng.gen_range(params.speed_min..params.speed_max);
-            spawn_particle(
-                &mut commands, 
-                &params.material, 
-                transform.translation, 
-                emit_vel, 
-                params.particle_drag, 
-                params.particle_size,
-                rng.gen_range(params.lifetime_min..params.lifetime_max)
-            );
-            to_emit -= 1.0;
-        }
-        emitter.emit_fractional_build = to_emit;
+        let to_emit = emitter.rate * time.delta_seconds() + emitter.emit_fractional_build;
+        let integer_emit = to_emit.floor() as i32;
+        emitter.emit_fractional_build = to_emit - (integer_emit as f32);
+        spawn_n_particles(integer_emit, &mut commands, transform.translation, params);
+    } 
+}
+
+pub fn burst_particle_emission_system(
+    mut commands: Commands,
+    mut query: Query<(&mut BurstParticleEmitter, &ParticleEmissionParams, &Transform, Entity)>
+) {
+    for (emitter, params, transform, entity) in query.iter_mut() {
+        spawn_n_particles(emitter.quantity, &mut commands, transform.translation, params);
+        commands.entity(entity).despawn_recursive();
     } 
     
 }
@@ -68,6 +68,24 @@ pub fn particle_update_system(
             part.velocity.x *= 1.0 - part.drag;
             part.velocity.y *= 1.0 - part.drag;
         }
+    }
+}
+
+fn spawn_n_particles(count: i32, commands: &mut Commands, position: Vec3, params: &ParticleEmissionParams) {
+    let mut rng = rand::thread_rng();
+    for _ in 0..count {
+        let angle = rng.gen_range(0.0..(2.0 * std::f32::consts::PI));
+        let direction = Vec2::new(f32::sin(angle), f32::cos(angle));
+        let emit_vel = direction * rng.gen_range(params.speed_min..params.speed_max);
+        spawn_particle(
+            commands, 
+            &params.material, 
+            position, 
+            emit_vel, 
+            params.particle_drag, 
+            params.particle_size,
+            rng.gen_range(params.lifetime_min..params.lifetime_max)
+        );
     }
 }
 

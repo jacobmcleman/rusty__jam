@@ -2,8 +2,14 @@ use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use nalgebra::{Vector2, vector};
 
+use crate::particles;
+
 pub struct PlayerMovement {
     pub speed: f32,
+}
+
+pub struct PlayerShooting {
+    smoke_mat: Handle<ColorMaterial>,
 }
 
 pub fn player_movement_system(
@@ -39,6 +45,31 @@ pub fn player_movement_system(
     }
 }
 
+pub fn player_shoot_system(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut commands: Commands,
+    query: Query<(&PlayerShooting, &Transform)>
+) {
+    if let Ok((player, transform)) = query.single() {
+        if keyboard_input.just_pressed(KeyCode::Space) {
+            commands.spawn()
+                .insert(particles::BurstParticleEmitter {
+                    quantity: 50
+                })
+                .insert(particles::ParticleEmissionParams {
+                    speed_min: 10.0,
+                    speed_max: 100.0,
+                    particle_drag: 0.001,
+                    particle_size: Vec2::new(10.0, 10.0),
+                    lifetime_min: 0.1,
+                    lifetime_max: 0.5,
+                    material: player.smoke_mat.clone(),
+                })
+                .insert(Transform::from_translation(transform.translation));
+            };
+    }
+}
+
 pub fn setup_player(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -67,5 +98,6 @@ pub fn setup_player(
         ..Default::default()
     })
     .insert(ColliderPositionSync::Discrete)
-    .insert(PlayerMovement {speed: 200.0});
+    .insert(PlayerMovement {speed: 200.0})
+    .insert(PlayerShooting {smoke_mat: materials.add(Color::rgb(0.0, 0.3, 0.5).into())});
 }

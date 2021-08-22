@@ -27,8 +27,10 @@ fn main() {
         .add_startup_system(player::setup_player.system().after("physics"))
         .add_startup_system(level::setup_environment.system().after("physics"))
         .add_system(player::player_movement_system.system())
+        .add_system(player::player_shoot_system.system())
         .add_system(level::level_builder_system.system())
         .add_system(particles::particle_emission_system.system())
+        .add_system(particles::burst_particle_emission_system.system())
         .add_system(particles::particle_update_system.system())
         .run();
 }
