@@ -20,7 +20,7 @@ pub fn setup_environment(
     mut commands: Commands,
 ) {
     commands.spawn()
-        .insert(gen_level_tiles(10, 10))
+        .insert(gen_level_tiles(16, 16))
         .insert(LevelState{built:false});
 
     //create_static_box(&mut commands, &mut materials, &rapier_config, Vec2::new(200.0, 200.0), Vec2::new(100.0, 100.0));
@@ -85,7 +85,7 @@ fn gen_level_tiles(width: usize, height: usize) -> LevelTiles {
     let mut tiles = Vec::<TileValue>::new();
     for y in 0..height {
         for x in 0..width {
-            tiles.push(if (x * y) % 2 == 1 || x * y == 0 {TileValue::Wall} else {TileValue::Empty});
+            tiles.push(if (x * y) % 3 == 1 || x * y == 0 {TileValue::Wall} else {TileValue::Empty});
         }
     }
     LevelTiles { width, height, tiles }

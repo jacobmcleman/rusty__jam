@@ -7,6 +7,7 @@ use nalgebra::Vector2;
 
 mod player;
 mod level;
+mod particles;
 
 fn main() {
     App::build()
@@ -27,17 +28,36 @@ fn main() {
         .add_startup_system(level::setup_environment.system().after("physics"))
         .add_system(player::player_movement_system.system())
         .add_system(level::level_builder_system.system())
+        .add_system(particles::particle_emission_system.system())
+        .add_system(particles::particle_update_system.system())
         .run();
 }
 
 
 fn setup(
     mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
     mut rapier_config: ResMut<RapierConfiguration>,
 ) {
     // Spawn cameras
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands.spawn_bundle(UiCameraBundle::default());
+
+    commands.spawn()
+        .insert(particles::ContinuousParticleEmitter {
+            rate: 10.0,
+            emit_fractional_build: 0.0,
+        })
+        .insert(particles::ParticleEmissionParams {
+            speed_min: 1.0,
+            speed_max: 10.0,
+            particle_drag: 0.001,
+            particle_size: Vec2::new(10.0, 10.0),
+            lifetime_min: 1.0,
+            lifetime_max: 5.0,
+            material: materials.add(Color::rgb(1.0, 0.3, 1.0).into()),
+        })
+        .insert(Transform::from_xyz(50.0, 0.0, 0.0));
 
     // Configure Physics
     rapier_config.scale = 40.0;
