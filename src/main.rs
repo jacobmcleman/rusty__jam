@@ -35,6 +35,8 @@ fn main() {
         .add_system(particles::burst_particle_emission_system.system())
         .add_system(particles::particle_update_system.system())
         .add_system(ai::ai_perception_system.system())
+        .add_system(ai::ai_movement_system.system())
+        .add_system(ai::ai_chase_behavior_system.system())
         .add_system(ai::ai_perception_debug_system.system())
         .run();
 }
@@ -49,6 +51,7 @@ fn setup(
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands.spawn_bundle(UiCameraBundle::default());
 
+    /*
     commands.spawn()
         .insert(particles::ContinuousParticleEmitter {
             rate: 10.0,
@@ -59,11 +62,12 @@ fn setup(
             speed_max: 10.0,
             particle_drag: 0.001,
             particle_size: Vec2::new(10.0, 10.0),
-            lifetime_min: 1.0,
+            lifetime_min: 1.0,a
             lifetime_max: 5.0,
             material: materials.add(Color::rgb(1.0, 0.3, 1.0).into()),
         })
         .insert(Transform::from_xyz(50.0, 0.0, 0.0));
+        */
 
     // Configure Physics
     rapier_config.scale = 40.0;

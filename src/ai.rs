@@ -23,6 +23,40 @@ impl AiPerception {
     }
 }
 
+pub struct AiMovement {
+    pub move_speed: f32,
+    move_to_target: bool,
+    target_position: Vec2,
+}
+
+impl AiMovement {
+    pub fn new(move_speed: f32) -> AiMovement {
+        AiMovement {
+            move_speed,
+            move_to_target: true,
+            target_position: Vec2::new(0.0, 0.0)
+        }
+    }
+
+    // Give an AI Movement component a new thing to move to
+    pub fn move_to(&mut self, target: Vec2) {
+        self.target_position = target;
+        self.move_to_target = true;
+    }
+
+    /*
+    pub fn is_moving(&self) -> bool {
+        self.move_to_target
+    }
+
+    pub fn halt(&mut self) {
+        self.move_to_target = false;
+    }
+    */
+}
+
+pub struct AiChaseBehavior;
+
 pub struct AiPerceptionDebugIndicator;
 
 pub fn setup_test_ai_perception(mut commands: Commands,
@@ -56,6 +90,8 @@ pub fn setup_test_ai_perception(mut commands: Commands,
     })
     .insert(ColliderPositionSync::Discrete)
     .insert(AiPerception::new(250.0))
+    .insert(AiMovement::new(150.0))
+    .insert(AiChaseBehavior{})
     .insert(AiPerceptionDebugIndicator{});
 }
 
@@ -96,7 +132,7 @@ pub fn ai_perception_system (
                 // Bad way of telling if this is the player for now, since the player is the only ball
                 if coll_shape.shape_type() == ShapeType::Ball {
                     perciever.can_see_target = true;
-                    perciever.target_position = Vec2::new(hit_point.x, hit_point.y);
+                    perciever.target_position = rapier_config.scale * Vec2::new(hit_point.x, hit_point.y);
                     continue;
                 }
             }
@@ -104,6 +140,38 @@ pub fn ai_perception_system (
 
         // If can see player we continued out of this iteration so if reached here we cannot see
         perciever.can_see_target = false;
+    }
+}
+
+pub fn ai_movement_system(
+    rapier_parameters: Res<RapierConfiguration>,
+    mut query: Query<(&mut AiMovement, &mut RigidBodyVelocity, & Transform)>
+) {
+    for(mut mover, mut rb_vel, transform) in query.iter_mut() {
+        let vec_to_target =  mover.target_position - transform.translation.xy();
+        let distance_to_target = vec_to_target.length();
+
+        if distance_to_target < 50.0 {
+            mover.move_to_target = false;
+        }
+        else {
+            // For now, this just dumb zombie moves towards the target
+            let move_dir = vec_to_target
+                .try_normalize()
+                .unwrap_or(Vec2::new(0.0,0.0));
+            let movement = move_dir * (1.0 / rapier_parameters.scale) * mover.move_speed;
+            rb_vel.linvel = vector![movement.x, movement.y];
+        }
+    }
+}
+
+pub fn ai_chase_behavior_system (
+    mut query: Query<(&mut AiMovement, &AiPerception)>
+) {
+    for(mut mover, perciever) in query.iter_mut() {
+        if perciever.can_see_target {
+            mover.move_to(perciever.target_position);
+        }
     }
 }
 
