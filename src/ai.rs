@@ -7,16 +7,36 @@ use nalgebra::{point, vector};
 
 use crate::player;
 
+pub struct Facing {
+    pub angle: f32,
+    pub turn_rate: f32
+}
+
+impl Facing {
+    pub fn new(turn_rate: f32) -> Facing {
+        Facing{ angle: 0.0, turn_rate }
+    }
+    pub fn forward(&self) -> Vec2 {
+        Vec2::new(f32::sin(self.angle), f32::cos(self.angle))
+    }
+    pub fn turn_towards(&mut self, target_angle: f32, turn_rate_mult: f32) {
+        let change_amt = (target_angle - self.angle).max(self.turn_rate * turn_rate_mult);
+        self.angle += change_amt;
+    }
+}
+
 pub struct AiPerception {
     pub visual_range: f32,
+    pub vision_cone_angle: f32,
     can_see_target: bool,
     target_position: Vec2,
 }
 
 impl AiPerception {
-    pub fn new(visual_range: f32) -> AiPerception {
+    pub fn new(visual_range: f32, vision_cone_angle: f32) -> AiPerception {
         AiPerception {
             visual_range,
+            vision_cone_angle,
             can_see_target: false,
             target_position: Vec2::new(0.0, 0.0)
         }
@@ -43,12 +63,11 @@ impl AiMovement {
         self.target_position = target;
         self.move_to_target = true;
     }
-
-    /*
+    
     pub fn is_moving(&self) -> bool {
         self.move_to_target
     }
-
+    /*
     pub fn halt(&mut self) {
         self.move_to_target = false;
     }
@@ -89,7 +108,8 @@ pub fn setup_test_ai_perception(mut commands: Commands,
         ..Default::default()
     })
     .insert(ColliderPositionSync::Discrete)
-    .insert(AiPerception::new(250.0))
+    .insert(Facing::new(std::f32::consts::FRAC_PI_2))
+    .insert(AiPerception::new(250.0, f32::to_radians(20.0)))
     .insert(AiMovement::new(150.0))
     .insert(AiChaseBehavior{})
     .insert(AiPerceptionDebugIndicator{});
@@ -99,41 +119,48 @@ pub fn ai_perception_system (
     query_pipeline: Res<QueryPipeline>,
     collider_query: QueryPipelineColliderComponentsQuery,
     rapier_config: Res<RapierConfiguration>,
-    mut query: Query<(Entity, &mut AiPerception, &Transform)>,
+    mut query: Query<(Entity, &mut AiPerception, &Transform, &Facing)>,
     player_query: Query<(&player::PlayerMovement, &Transform)>
 ) {
     let (_player_movement, player_transform) = player_query.single().expect("There should be exactly 1 player");
     let player_position = player_transform.translation;
 
-    for (percieve_entity, mut perciever, transform) in query.iter_mut() {
+    for (percieve_entity, mut perciever, transform, facing) in query.iter_mut() {
         let collider_set = QueryPipelineColliderComponentsSet(&collider_query);
 
         let vec_to_player =  player_position.xy() - transform.translation.xy();
         let dir_to_player = vec_to_player
             .try_normalize()
-            .unwrap_or(Vec2::new(0.0,1.0));
+            .unwrap_or(-facing.forward());
 
-        let ray = Ray::new(
-            point![transform.translation.x / rapier_config.scale, transform.translation.y / rapier_config.scale], 
-            vector![dir_to_player.x, dir_to_player.y]);
-        let max_toi = perciever.visual_range / rapier_config.scale;
-        let solid = true;
-        let groups = InteractionGroups::all();
-        let filter_func = |handle: ColliderHandle| {
-            handle.entity() != percieve_entity
-        };
-        let filter: Option<&dyn Fn(ColliderHandle) -> bool> = Some(&filter_func);
+        let angle = Vec2::angle_between(facing.forward(), dir_to_player);
 
-        if let Some((handle, toi)) = query_pipeline.cast_ray(
-            &collider_set, &ray, max_toi, solid, groups, filter
-        ) {
-            let hit_point = ray.point_at(toi);
-            if let Ok((_entity, _coll_pos, coll_shape, _coll_flags)) = collider_query.get(handle.entity()) {
-                // Bad way of telling if this is the player for now, since the player is the only ball
-                if coll_shape.shape_type() == ShapeType::Ball {
-                    perciever.can_see_target = true;
-                    perciever.target_position = rapier_config.scale * Vec2::new(hit_point.x, hit_point.y);
-                    continue;
+        //println!("Angle to target is {0:3} at distance {1:3}", angle, vec_to_player.length());
+
+        // Easy escape on cheap math checks
+        if angle <= perciever.vision_cone_angle && vec_to_player.length_squared() <= (perciever.visual_range * perciever.visual_range) {
+            let ray = Ray::new(
+                point![transform.translation.x / rapier_config.scale, transform.translation.y / rapier_config.scale], 
+                vector![dir_to_player.x, dir_to_player.y]);
+            let max_toi = perciever.visual_range / rapier_config.scale;
+            let solid = true;
+            let groups = InteractionGroups::all();
+            let filter_func = |handle: ColliderHandle| {
+                handle.entity() != percieve_entity
+            };
+            let filter: Option<&dyn Fn(ColliderHandle) -> bool> = Some(&filter_func);
+
+            if let Some((handle, toi)) = query_pipeline.cast_ray(
+                &collider_set, &ray, max_toi, solid, groups, filter
+            ) {
+                let hit_point = ray.point_at(toi);
+                if let Ok((_entity, _coll_pos, coll_shape, _coll_flags)) = collider_query.get(handle.entity()) {
+                    // Bad way of telling if this is the player for now, since the player is the only ball
+                    if coll_shape.shape_type() == ShapeType::Ball {
+                        perciever.can_see_target = true;
+                        perciever.target_position = rapier_config.scale * Vec2::new(hit_point.x, hit_point.y);
+                        continue;
+                    }
                 }
             }
         }
@@ -166,11 +193,16 @@ pub fn ai_movement_system(
 }
 
 pub fn ai_chase_behavior_system (
-    mut query: Query<(&mut AiMovement, &AiPerception)>
+    time: Res<Time>,
+    mut query: Query<(&mut AiMovement, &AiPerception, &mut Facing)>
 ) {
-    for(mut mover, perciever) in query.iter_mut() {
+    for(mut mover, perciever, mut facing) in query.iter_mut() {
         if perciever.can_see_target {
             mover.move_to(perciever.target_position);
+        } 
+        else if !mover.is_moving(){
+            let new_target_angle = facing.angle + 1.0;
+            facing.turn_towards(new_target_angle, time.delta_seconds());
         }
     }
 }

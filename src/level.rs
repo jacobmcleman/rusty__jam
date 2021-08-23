@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
+use geo::{Coordinate, Rect};
 
 pub enum TileValue {
     Empty,
