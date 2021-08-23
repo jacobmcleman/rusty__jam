@@ -1,8 +1,9 @@
-use bevy::prelude::*;
+use bevy::{math::Vec3Swizzles, prelude::*, render::{mesh, pipeline::{PipelineDescriptor, RenderPipeline}, shader::{ShaderStage, ShaderStages}}};
 use bevy_rapier2d::prelude::*;
 use nalgebra::{Vector2, vector};
 
 use crate::particles;
+use crate::lighting;
 
 pub struct PlayerMovement {
     pub speed: f32,
@@ -52,6 +53,8 @@ pub fn player_shoot_system(
 ) {
     if let Ok((player, transform)) = query.single() {
         if keyboard_input.just_pressed(KeyCode::Space) {
+            println!("player position: {}", transform.translation);
+
             commands.spawn()
                 .insert(particles::BurstParticleEmitter {
                     quantity: 50
@@ -73,6 +76,9 @@ pub fn player_shoot_system(
 pub fn setup_player(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut pipelines: ResMut<Assets<PipelineDescriptor>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut shaders: ResMut<Assets<Shader>>,
     rapier_config: Res<RapierConfiguration>,
     asset_server: Res<AssetServer>,
 ) {
@@ -84,6 +90,20 @@ pub fn setup_player(
 
     let collider_size_x = sprite_size_x / rapier_config.scale;
     let collider_size_y = sprite_size_y / rapier_config.scale;
+
+    let pipeline_handle = pipelines.add(PipelineDescriptor::default_config(ShaderStages {
+        vertex: shaders.add(Shader::from_glsl(ShaderStage::Vertex, lighting::VERTEX_SHADER)),
+        fragment: Some(shaders.add(Shader::from_glsl(ShaderStage::Fragment, lighting::FRAGMENT_SHADER))),
+    }));
+
+    let mut light_mesh = Mesh::new(bevy::render::pipeline::PrimitiveTopology::TriangleList);
+    let v_pos = vec![[0.0, 0.0, 0.0], [200.0, 0.0, 0.0], [0.0, 200.0, 0.0]];
+    let indices = vec![0, 1, 2];
+
+    light_mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, v_pos);
+    light_mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
+
+    let mesh = meshes.add(light_mesh);
 
     commands
     .spawn()
@@ -103,5 +123,14 @@ pub fn setup_player(
     })
     .insert(ColliderPositionSync::Discrete)
     .insert(PlayerMovement {speed: 200.0})
-    .insert(PlayerShooting {smoke_mat: materials.add(Color::rgb(0.0, 0.3, 0.5).into())});
+    .insert(PlayerShooting {smoke_mat: materials.add(Color::rgb(0.0, 0.3, 0.5).into())})
+    .insert_bundle(MeshBundle {
+        mesh: mesh,
+        render_pipelines: RenderPipelines::from_pipelines(vec![RenderPipeline::new(
+            pipeline_handle,
+        )]),
+
+        ..Default::default()
+    })
+    .insert(lighting::PointLight::new(Color::YELLOW, 300.0));
 }

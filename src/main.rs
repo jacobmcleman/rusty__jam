@@ -9,6 +9,7 @@ mod player;
 mod level;
 mod particles;
 mod ai;
+mod lighting;
 
 fn main() {
     App::build()
@@ -27,7 +28,7 @@ fn main() {
         .add_startup_system(setup.system().label("physics"))
         .add_startup_system(player::setup_player.system().after("physics"))
         .add_startup_system(level::setup_environment.system().after("physics"))
-        .add_startup_system(ai::setup_test_ai_perception.system().after("physics"))
+        //.add_startup_system(ai::setup_test_ai_perception.system().after("physics"))
         .add_system(player::player_movement_system.system())
         .add_system(player::player_shoot_system.system())
         .add_system(level::level_builder_system.system())
@@ -38,6 +39,8 @@ fn main() {
         .add_system(ai::ai_movement_system.system())
         .add_system(ai::ai_chase_behavior_system.system())
         .add_system(ai::ai_perception_debug_system.system())
+        .add_startup_system(lighting::light_setup_system.system())
+        .add_system(lighting::point_light_mesh_builder.system())
         .run();
 }
 

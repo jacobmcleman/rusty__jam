@@ -27,7 +27,8 @@ pub fn setup_environment(
 ) {
     commands.spawn()
         .insert(gen_level_tiles(16, 16))
-        .insert(LevelState{built:false});
+        .insert(LevelState{built:false})
+        .insert(LevelGeo{blocks: MultiPolygon(vec![])});
 
     //create_static_box(&mut commands, &mut materials, &rapier_config, Vec2::new(200.0, 200.0), Vec2::new(100.0, 100.0));
     //create_static_box(&mut commands, &mut materials, &rapier_config, Vec2::new(-100.0, -100.0), Vec2::new(100.0, 100.0));
@@ -61,8 +62,8 @@ fn create_static_box(commands: &mut Commands,
     })
     .insert(ColliderPositionSync::Discrete);
     
-    let min_point = position - (0.5 * size);
-    let max_point = position + (0.5 * size);
+    let min_point = (position + (-0.5 * size));
+    let max_point = (position + (0.5 * size));
 
     level_geo.push(geo::Rect::new(bevy_vec2_to_geo_coord(min_point), bevy_vec2_to_geo_coord(max_point)).into());
 }
@@ -102,7 +103,7 @@ pub fn level_builder_system(
     }
 }
 
-fn get_visibility_polygon(level_geo: &LevelGeo, from_point: &Vec2) -> Polygon<f64>{
+pub fn get_visibility_polygon(level_geo: &LevelGeo, from_point: Vec2) -> Polygon<f64>{
     let point = geo::Point::new(from_point.x as f64, from_point.y as f64);
     return point.visibility(&level_geo.blocks);
 }
@@ -112,7 +113,7 @@ fn gen_level_tiles(width: usize, height: usize) -> LevelTiles {
     for y in 0..height {
         for x in 0..width {
             tiles.push(
-                if (x * y) % 4 == 1 || x * y == 0 || x == width - 1 || y == height - 1 {TileValue::Wall} 
+                if (x * x * y) % 4 == 1 || x * y == 0 || x == width - 1 || y == height - 1 {TileValue::Wall} 
                 else {TileValue::Empty}
             );
         }
