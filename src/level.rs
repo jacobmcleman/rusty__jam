@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
-use geo::{Coordinate, Rect};
+use geo::{Coordinate, MultiPolygon, Polygon};
+use geo_visibility::Visibility;
 
 pub enum TileValue {
     Empty,
@@ -11,6 +12,10 @@ pub struct LevelTiles {
     width: usize,
     height: usize,
     tiles: Vec<TileValue>
+}
+
+pub struct LevelGeo {
+    blocks: MultiPolygon<f64>
 }
 
 pub struct LevelState {
@@ -28,9 +33,14 @@ pub fn setup_environment(
     //create_static_box(&mut commands, &mut materials, &rapier_config, Vec2::new(-100.0, -100.0), Vec2::new(100.0, 100.0));
 }
 
+fn bevy_vec2_to_geo_coord(bv: Vec2) -> Coordinate<f64> {
+    Coordinate{x: bv.x as f64, y: bv.y as f64}
+}
+
 fn create_static_box(commands: &mut Commands,
     materials: &mut ResMut<Assets<ColorMaterial>>,
     rapier_config: &Res<RapierConfiguration>,
+    level_geo: &mut Vec<Polygon<f64>>,
     position: Vec2, size: Vec2
 ) {
     let collider_size_x = size.x / rapier_config.scale;
@@ -50,18 +60,25 @@ fn create_static_box(commands: &mut Commands,
         ..Default::default()
     })
     .insert(ColliderPositionSync::Discrete);
+    
+    let min_point = position - (0.5 * size);
+    let max_point = position + (0.5 * size);
+
+    level_geo.push(geo::Rect::new(bevy_vec2_to_geo_coord(min_point), bevy_vec2_to_geo_coord(max_point)).into());
 }
 
 pub fn level_builder_system(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
     rapier_config: Res<RapierConfiguration>,
-    mut level_query: Query<(&mut LevelState, &LevelTiles)>
+    mut level_query: Query<(&mut LevelState, &LevelTiles, &mut LevelGeo)>
 ) {
-    if let Ok((mut level_state, level_data)) = level_query.single_mut() {
+    if let Ok((mut level_state, level_data, mut level_geo)) = level_query.single_mut() {
         if level_state.built { return; }
 
         let tile_size = 50.0;
+
+        let mut level_polygons = Vec::<Polygon<f64>>::new();
 
         let offset = Vec2::new((level_data.width / 2) as f32 * -tile_size, (level_data.height / 2) as f32 * -tile_size);
 
@@ -72,14 +89,22 @@ pub fn level_builder_system(
                         &mut commands, 
                         &mut materials, 
                         &rapier_config, 
+                        &mut level_polygons,
                         offset + Vec2::new(tile_size * x as f32, tile_size * y as f32), 
                         Vec2::new(tile_size, tile_size));
                 }
             }
         }
 
+        level_geo.blocks = MultiPolygon(level_polygons);
+
         level_state.built = true;
     }
+}
+
+fn get_visibility_polygon(level_geo: &LevelGeo, from_point: &Vec2) -> Polygon<f64>{
+    let point = geo::Point::new(from_point.x as f64, from_point.y as f64);
+    return point.visibility(&level_geo.blocks);
 }
 
 fn gen_level_tiles(width: usize, height: usize) -> LevelTiles {
