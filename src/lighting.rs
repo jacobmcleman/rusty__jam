@@ -10,8 +10,8 @@ pub struct LightRenderData {
 
 pub struct PointLight {
     mesh_built: bool,
-    color: Color,
-    reach: f32
+    pub color: Color,
+    pub reach: f32
 }
 
 impl PointLight {
@@ -22,16 +22,16 @@ impl PointLight {
 
 pub struct SpotLight {
     mesh_built: bool,
-    color: Color,
-    angle: f32,
-    reach: f32
+    pub color: Color,
+    pub angle: f32,
+    pub reach: f32
 }
 
 pub struct TestSpin {}
 
 impl SpotLight {
     pub fn new(angle: f32, color: Color, reach: f32) -> SpotLight {
-        SpotLight{mesh_built: false, color, angle: f32::to_radians(angle), reach}
+        SpotLight{mesh_built: false, color, angle, reach}
     }
 }
 
@@ -188,7 +188,7 @@ void main() {
     vec3 to_source = l_Position - position;
     float distance = length(to_source);
     to_source = to_source / distance;
-    vec3 facing = vec3(cos(l_Facing), sin(l_Facing), to_source.z);
+    vec3 facing = vec3(-cos(l_Facing), -sin(l_Facing), to_source.z);
     float angle = acos(dot(to_source, facing));
     float angle_falloff = l_Angle <= angle ? 0 : 1;//clamp(1 - (angle / l_Angle), 0.0, 1.0);
     float light_power = clamp(1 - (distance / l_power), 0.0, 1.0);

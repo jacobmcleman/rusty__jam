@@ -112,14 +112,5 @@ pub fn setup_player(
     .insert(ColliderPositionSync::Discrete)
     .insert(PlayerMovement {speed: 200.0})
     .insert(PlayerShooting {smoke_mat: materials.add(Color::rgb(0.0, 0.3, 0.5).into())})
-    .insert_bundle(MeshBundle {
-        mesh: mesh,
-        render_pipelines: RenderPipelines::from_pipelines(vec![RenderPipeline::new(
-            render_data.pipeline_handle.clone().unwrap(),
-        )]),
-        visible: Visible { is_transparent: true, is_visible: true },
-        ..Default::default()
-    })
-    .insert(lighting::PointLight::new(Color::YELLOW, 250.0))
     ;
 }
