@@ -129,8 +129,9 @@ pub fn setup_player(
         render_pipelines: RenderPipelines::from_pipelines(vec![RenderPipeline::new(
             pipeline_handle,
         )]),
-
+        visible: Visible { is_transparent: true, is_visible: true },
         ..Default::default()
     })
-    .insert(lighting::PointLight::new(Color::YELLOW, 300.0));
+    .insert(lighting::PointLight::new(Color::YELLOW, 250.0))
+    ;
 }
