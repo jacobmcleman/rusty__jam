@@ -41,6 +41,8 @@ fn main() {
         .add_system(ai::ai_perception_debug_system.system())
         .add_startup_system(lighting::light_setup_system.system())
         .add_system(lighting::point_light_mesh_builder.system())
+        .add_system(lighting::spotlight_mesh_builder.system())
+        .add_system(lighting::test_spin_system.system())
         .run();
 }
 

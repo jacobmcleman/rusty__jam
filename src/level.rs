@@ -113,7 +113,7 @@ fn gen_level_tiles(width: usize, height: usize) -> LevelTiles {
     for y in 0..height {
         for x in 0..width {
             tiles.push(
-                if (x * x * y) % 4 == 1 || x * y == 0 || x == width - 1 || y == height - 1 {TileValue::Wall} 
+                if (x * y) % 4 == 1 || x * y == 0 || x == width - 1 || y == height - 1 {TileValue::Wall} 
                 else {TileValue::Empty}
             );
         }
