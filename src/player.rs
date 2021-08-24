@@ -1,9 +1,8 @@
-use bevy::{prelude::*, render::{pipeline::{RenderPipeline}}};
+use bevy::{prelude::*};
 use bevy_rapier2d::prelude::*;
 use nalgebra::{Vector2, vector};
 
 use crate::particles;
-use crate::lighting;
 
 pub struct PlayerMovement {
     pub speed: f32,
@@ -76,8 +75,6 @@ pub fn player_shoot_system(
 pub fn setup_player(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    render_data: ResMut<lighting::LightRenderData>,
     rapier_config: Res<RapierConfiguration>,
     asset_server: Res<AssetServer>,
 ) {
@@ -89,9 +86,6 @@ pub fn setup_player(
 
     let collider_size_x = sprite_size_x / rapier_config.scale;
     let collider_size_y = sprite_size_y / rapier_config.scale;
-
-
-    let mesh = meshes.add(render_data.base_mesh.clone().unwrap());
 
     commands
     .spawn()

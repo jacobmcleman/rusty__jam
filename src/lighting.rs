@@ -1,6 +1,7 @@
-use bevy::{math::Vec3Swizzles, prelude::*, render::{pipeline::{BlendOperation, PipelineDescriptor, RenderPipeline}, shader::{ShaderStage, ShaderStages}}};
+use bevy::{math::Vec3Swizzles, prelude::*, render::{pipeline::{BlendOperation, PipelineDescriptor}, shader::{ShaderStage, ShaderStages}}};
 use geo::coords_iter::CoordsIter;
-use crate::level::{self, get_visibility_polygon};
+
+use crate::level;
 use crate::ai::Facing;
 
 pub struct LightRenderData {

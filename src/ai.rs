@@ -1,7 +1,7 @@
 use bevy::{
     prelude::*, 
     math::Vec3Swizzles,
-    render::pipeline::{PipelineDescriptor, RenderPipeline},
+    render::pipeline::{RenderPipeline},
 };
 use bevy_rapier2d::prelude::*;
 use nalgebra::{point, vector};
@@ -122,7 +122,7 @@ pub fn setup_test_ai_perception(mut commands: Commands,
         ..Default::default()
     })
     .insert(ColliderPositionSync::Discrete)
-    .insert(Facing{angle: std::f32::consts::PI, turn_rate: std::f32::consts::FRAC_PI_4})//Facing::new(std::f32::consts::FRAC_PI_4))
+    .insert(Facing::new(std::f32::consts::FRAC_PI_4))
     .insert(AiPerception::new(250.0, f32::to_radians(30.0)))
     .insert(AiMovement::new(150.0))
     .insert(AiChaseBehavior{})
