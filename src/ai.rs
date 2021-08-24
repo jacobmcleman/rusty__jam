@@ -1,11 +1,13 @@
 use bevy::{
     prelude::*, 
-    math::Vec3Swizzles
+    math::Vec3Swizzles,
+    render::pipeline::{PipelineDescriptor, RenderPipeline},
 };
 use bevy_rapier2d::prelude::*;
 use nalgebra::{point, vector};
 
 use crate::player;
+use crate::lighting;
 
 pub struct Facing {
     pub angle: f32,
@@ -82,6 +84,8 @@ pub fn setup_test_ai_perception(mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
     rapier_config: Res<RapierConfiguration>,
     asset_server: Res<AssetServer>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    render_data: ResMut<lighting::LightRenderData>,
 ) {
     // Load sprite
     let circle_texture_handle: Handle<Texture> = asset_server.load("sprites/circle.png");
@@ -92,11 +96,12 @@ pub fn setup_test_ai_perception(mut commands: Commands,
     let collider_size_x = sprite_size_x / rapier_config.scale;
     let collider_size_y = sprite_size_y / rapier_config.scale;
 
-    commands
+    let test_enemy = commands
     .spawn()
     .insert_bundle(SpriteBundle {
         material: materials.add(circle_texture_handle.into()),
         sprite: Sprite::new(Vec2::new(sprite_size_x, sprite_size_y)),
+        visible: Visible { is_transparent: true, is_visible: true },
         ..Default::default()
     })
     .insert_bundle(RigidBodyBundle {
@@ -112,7 +117,24 @@ pub fn setup_test_ai_perception(mut commands: Commands,
     .insert(AiPerception::new(250.0, f32::to_radians(20.0)))
     .insert(AiMovement::new(150.0))
     .insert(AiChaseBehavior{})
-    .insert(AiPerceptionDebugIndicator{});
+    .insert(AiPerceptionDebugIndicator{})
+    .id();
+
+    let mesh = meshes.add(render_data.base_mesh.clone().unwrap());
+    let vision_spotlight = commands.spawn_bundle(MeshBundle {
+        mesh: mesh.clone(),
+        render_pipelines: RenderPipelines::from_pipelines(vec![RenderPipeline::new(
+            render_data.pipeline_handle.clone().unwrap(),
+        )]),
+        transform: Transform::from_xyz(0.0, 0.0, 0.1),
+        visible: Visible { is_transparent: true, is_visible: true },
+        ..Default::default()
+    })
+    .insert(lighting::SpotLight::new(20.0, Color::RED, 500.0))
+    .insert(Facing::new(std::f32::consts::FRAC_PI_4))
+    .id();
+
+    commands.entity(test_enemy).push_children(&[vision_spotlight]);
 }
 
 pub fn ai_perception_system (
@@ -209,7 +231,7 @@ pub fn ai_chase_behavior_system (
 
 pub fn ai_perception_debug_system (
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut query: Query<(&AiPerception, &AiPerceptionDebugIndicator, &mut Handle<ColorMaterial>)>
+    mut query: Query<(&AiPerception, &AiPerceptionDebugIndicator, &mut Handle<ColorMaterial>)>,
 ) {
     for (perciever, _indicator, mat_handle) in query.iter_mut() {
         if let Some(mut color_mat) = materials.get_mut(mat_handle.id) {

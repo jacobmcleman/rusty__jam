@@ -1,4 +1,4 @@
-use bevy::{math::Vec3Swizzles, prelude::*, render::{mesh, pipeline::{PipelineDescriptor, RenderPipeline}, shader::{ShaderStage, ShaderStages}}};
+use bevy::{prelude::*, render::{pipeline::{RenderPipeline}}};
 use bevy_rapier2d::prelude::*;
 use nalgebra::{Vector2, vector};
 
@@ -76,9 +76,8 @@ pub fn player_shoot_system(
 pub fn setup_player(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut pipelines: ResMut<Assets<PipelineDescriptor>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut shaders: ResMut<Assets<Shader>>,
+    render_data: ResMut<lighting::LightRenderData>,
     rapier_config: Res<RapierConfiguration>,
     asset_server: Res<AssetServer>,
 ) {
@@ -91,19 +90,8 @@ pub fn setup_player(
     let collider_size_x = sprite_size_x / rapier_config.scale;
     let collider_size_y = sprite_size_y / rapier_config.scale;
 
-    let pipeline_handle = pipelines.add(PipelineDescriptor::default_config(ShaderStages {
-        vertex: shaders.add(Shader::from_glsl(ShaderStage::Vertex, lighting::VERTEX_SHADER)),
-        fragment: Some(shaders.add(Shader::from_glsl(ShaderStage::Fragment, lighting::FRAGMENT_SHADER))),
-    }));
 
-    let mut light_mesh = Mesh::new(bevy::render::pipeline::PrimitiveTopology::TriangleList);
-    let v_pos = vec![[0.0, 0.0, 0.0], [200.0, 0.0, 0.0], [0.0, 200.0, 0.0]];
-    let indices = vec![0, 1, 2];
-
-    light_mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, v_pos);
-    light_mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
-
-    let mesh = meshes.add(light_mesh);
+    let mesh = meshes.add(render_data.base_mesh.clone().unwrap());
 
     commands
     .spawn()
@@ -127,7 +115,7 @@ pub fn setup_player(
     .insert_bundle(MeshBundle {
         mesh: mesh,
         render_pipelines: RenderPipelines::from_pipelines(vec![RenderPipeline::new(
-            pipeline_handle,
+            render_data.pipeline_handle.clone().unwrap(),
         )]),
         visible: Visible { is_transparent: true, is_visible: true },
         ..Default::default()

@@ -1,6 +1,12 @@
 use bevy::{math::Vec3Swizzles, prelude::*, render::{pipeline::{BlendOperation, PipelineDescriptor, RenderPipeline}, shader::{ShaderStage, ShaderStages}}};
 use geo::coords_iter::CoordsIter;
 use crate::level::{self, get_visibility_polygon};
+use crate::ai::Facing;
+
+pub struct LightRenderData {
+    pub pipeline_handle: Option<Handle<PipelineDescriptor>>,
+    pub base_mesh: Option<Mesh>
+}
 
 pub struct PointLight {
     mesh_built: bool,
@@ -74,7 +80,7 @@ fn build_mesh_for_vis_poly_cone(poly: &geo::Polygon<f64>, mesh: &mut Mesh, cente
 }
 
 pub fn point_light_mesh_builder(
-    mut query: Query<(&mut PointLight, &Transform, &mut Handle<Mesh>)>,
+    mut query: Query<(&mut PointLight, &GlobalTransform, &mut Handle<Mesh>)>,
     mut meshes: ResMut<Assets<Mesh>>,
     level_query: Query<&level::LevelGeo>
 ) {
@@ -91,18 +97,21 @@ pub fn point_light_mesh_builder(
 }
 
 pub fn spotlight_mesh_builder(
-    mut query: Query<(&mut SpotLight, &Transform, &crate::ai::Facing, &mut Handle<Mesh>)>,
+    mut query: Query<(&mut SpotLight, &GlobalTransform, &Parent, &mut Handle<Mesh>)>,
+    parent_query: Query<&Facing, With<Children>>,
     mut meshes: ResMut<Assets<Mesh>>,
     level_query: Query<&level::LevelGeo>
 ) {
     if let Ok(level_geo) = level_query.single() {
-        for (mut light, transform, facing, mesh_handle) in query.iter_mut() {
-            let center: Vec2 = transform.translation.xy();
-            let vis_polygon = level::get_visibility_polygon(&level_geo, center);
-            if let Some(mesh) = meshes.get_mut(mesh_handle.id) {
-                //build_mesh_for_vis_poly(&vis_polygon, mesh, center, transform.translation.z, light.color, light.reach);
-                build_mesh_for_vis_poly_cone(&vis_polygon, mesh, center, transform.translation.z, light.color, light.reach, facing.angle, light.angle);
-                light.mesh_built = true;
+        for (mut light, transform, parent, mesh_handle) in query.iter_mut() {
+            if let Ok(facing) = parent_query.get(parent.0) {
+                let center: Vec2 = transform.translation.xy();
+                let vis_polygon = level::get_visibility_polygon(&level_geo, center);
+                if let Some(mesh) = meshes.get_mut(mesh_handle.id) {
+                    //build_mesh_for_vis_poly(&vis_polygon, mesh, center, transform.translation.z, light.color, light.reach);
+                    build_mesh_for_vis_poly_cone(&vis_polygon, mesh, center, transform.translation.z, light.color, light.reach, facing.angle, light.angle);
+                    light.mesh_built = true;
+                }
             }
         }
     }
@@ -119,9 +128,8 @@ pub fn test_spin_system(
 
 
 pub fn light_setup_system(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut pipelines: ResMut<Assets<PipelineDescriptor>>,
+    mut render_data: ResMut<LightRenderData>,
     mut shaders: ResMut<Assets<Shader>>,
 ) {
     
@@ -130,52 +138,13 @@ pub fn light_setup_system(
         fragment: Some(shaders.add(Shader::from_glsl(ShaderStage::Fragment, FRAGMENT_SHADER))),
     });
 
-
     for color_state in &mut pipeline.color_target_states {
         color_state.alpha_blend.operation = BlendOperation::Add;
         color_state.color_blend.operation = BlendOperation::Add;
     }
 
-    let pipeline_handle = pipelines.add(pipeline);
-
-
-    let mut light_mesh = Mesh::new(bevy::render::pipeline::PrimitiveTopology::TriangleList);
-    let v_pos = vec![[0.0, 0.0, 0.0], [200.0, 0.0, 0.0], [0.0, 200.0, 0.0]];
-    //let v_color = vec![[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.5], [0.0, 0.0, 1.0, 1.0]];
-    let indices = vec![0, 1, 2];
-
-    
-    light_mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, v_pos);
-    //light_mesh.set_attribute("Vertex_Color", v_color);
-    light_mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
-
-    let mesh = meshes.add(light_mesh);
-    
-    // We can now spawn the entities for the star and the camera
-    commands.spawn_bundle(MeshBundle {
-        mesh: mesh.clone(),
-        render_pipelines: RenderPipelines::from_pipelines(vec![RenderPipeline::new(
-            pipeline_handle.clone(),
-        )]),
-        transform: Transform::from_xyz(150.0, 0.0, 0.1),
-        visible: Visible { is_transparent: true, is_visible: true },
-        ..Default::default()
-    })
-    .insert(PointLight::new(Color::BLUE, 500.0));
-
-    // We can now spawn the entities for the star and the camera
-    commands.spawn_bundle(MeshBundle {
-        mesh: mesh.clone(),
-        render_pipelines: RenderPipelines::from_pipelines(vec![RenderPipeline::new(
-            pipeline_handle.clone(),
-        )]),
-        transform: Transform::from_xyz(-150.0, 0.0, 0.2),
-        visible: Visible { is_transparent: true, is_visible: true },
-        ..Default::default()
-    })
-    .insert(SpotLight::new(20.0, Color::RED, 500.0))
-    .insert(crate::ai::Facing::new(std::f32::consts::FRAC_PI_4))
-    .insert(TestSpin{});
+    render_data.pipeline_handle = Some(pipelines.add(pipeline));
+    render_data.base_mesh = Some(Mesh::new(bevy::render::pipeline::PrimitiveTopology::TriangleList));
 }
 
 pub const VERTEX_SHADER: &str = r"

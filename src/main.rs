@@ -22,13 +22,17 @@ fn main() {
             mode: WindowMode::Windowed,
             ..Default::default()
         })
+        .insert_resource(lighting::LightRenderData {
+            pipeline_handle: None,
+            base_mesh: None
+        })
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
         .add_startup_system(setup.system().label("physics"))
-        .add_startup_system(player::setup_player.system().after("physics"))
+        .add_startup_system(player::setup_player.system().after("physics").after("graphics_init"))
         .add_startup_system(level::setup_environment.system().after("physics"))
-        //.add_startup_system(ai::setup_test_ai_perception.system().after("physics"))
+        .add_startup_system(ai::setup_test_ai_perception.system().after("physics").after("graphics_init"))
         .add_system(player::player_movement_system.system())
         .add_system(player::player_shoot_system.system())
         .add_system(level::level_builder_system.system())
@@ -39,7 +43,7 @@ fn main() {
         .add_system(ai::ai_movement_system.system())
         .add_system(ai::ai_chase_behavior_system.system())
         .add_system(ai::ai_perception_debug_system.system())
-        .add_startup_system(lighting::light_setup_system.system())
+        .add_startup_system(lighting::light_setup_system.system().label("graphics_init"))
         .add_system(lighting::point_light_mesh_builder.system())
         .add_system(lighting::spotlight_mesh_builder.system())
         .add_system(lighting::test_spin_system.system())
@@ -49,30 +53,11 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
-    //mut materials: ResMut<Assets<ColorMaterial>>,
     mut rapier_config: ResMut<RapierConfiguration>,
 ) {
     // Spawn cameras
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands.spawn_bundle(UiCameraBundle::default());
-
-    /*
-    commands.spawn()
-        .insert(particles::ContinuousParticleEmitter {
-            rate: 10.0,
-            emit_fractional_build: 0.0,
-        })
-        .insert(particles::ParticleEmissionParams {
-            speed_min: 1.0,
-            speed_max: 10.0,
-            particle_drag: 0.001,
-            particle_size: Vec2::new(10.0, 10.0),
-            lifetime_min: 1.0,a
-            lifetime_max: 5.0,
-            material: materials.add(Color::rgb(1.0, 0.3, 1.0).into()),
-        })
-        .insert(Transform::from_xyz(50.0, 0.0, 0.0));
-        */
 
     // Configure Physics
     rapier_config.scale = 40.0;
