@@ -5,6 +5,7 @@ use bevy::{
 };
 use bevy_rapier2d::prelude::*;
 use nalgebra::{point, vector};
+use rand::Rng;
 
 use crate::player;
 use crate::lighting;
@@ -242,10 +243,16 @@ pub fn ai_movement_system(
                 || mover.current_path.last().unwrap().distance(mover.target_position) > 60.0    // Last point in path is stale 
                 // Safe to unwrap last since previous check covers the empty case
             { 
+                mover.path_index = 0;
                 // path is stale or non-existent, need to request a new one
                 if let Some(path) = level.get_path(transform.translation.xy(), mover.target_position) {
                     mover.current_path = path;
-                    mover.path_index = 0;
+                    
+                }
+                else {
+                    mover.current_path.clear();
+                    mover.move_to_target = false;
+                    continue;
                 }
             }
 
@@ -253,13 +260,13 @@ pub fn ai_movement_system(
             let distance_to_target = vec_to_target.length();
             
 
-            if distance_to_target < 25.0 {
+            if distance_to_target < 60.0 {
                 mover.move_to_target = false;
             }
             else {
                 // Move along path
                 let next_point = mover.current_path[mover.path_index];
-                if transform.translation.xy().distance(next_point) < 20.0 {
+                if transform.translation.xy().distance(next_point) < 30.0 {
                     mover.path_index += 1;
                 }
 
@@ -280,12 +287,18 @@ pub fn ai_chase_behavior_system (
     time: Res<Time>,
     mut query: Query<(&mut AiMovement, &AiPerception, &mut Facing)>
 ) {
+    let mut rng = rand::thread_rng();
     for(mut mover, perciever, mut facing) in query.iter_mut() {
         if perciever.can_see_target {
             mover.move_to(perciever.target_position);
+            mover.move_speed = 150.0;
+            facing.turn_rate = std::f32::consts::PI;
+            
         } 
         else if !mover.is_moving(){
-            facing.turn(1.0, time.delta_seconds());
+            mover.move_to(perciever.target_position + Vec2::new(rng.gen_range(-250.0..250.0), rng.gen_range(-250.0..250.0)));
+            mover.move_speed = 50.0;
+            facing.turn_rate = std::f32::consts::FRAC_PI_2;
         }
     }
 }
