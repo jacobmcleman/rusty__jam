@@ -2,16 +2,89 @@ use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use geo::{Coordinate, MultiPolygon, Polygon};
 use geo_visibility::Visibility;
+use pathfinding::prelude::{absdiff, astar};
 
+
+#[derive(Clone, PartialEq)]
 pub enum TileValue {
     Empty,
-    Wall
+    Wall,
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct GridPos {
+    pub x: i32, pub y: i32
+}
+
+impl GridPos {
+    fn distance(&self, other: &GridPos) -> u32 {
+        (absdiff(self.x, other.x) + absdiff(self.y, other.y)) as u32
+    }
 }
 
 pub struct LevelTiles {
     width: usize,
     height: usize,
+    tile_size: f32,
     tiles: Vec<TileValue>
+}
+
+impl LevelTiles {
+    pub fn get_path(&self, from: Vec2, to: Vec2) -> Option<Vec<Vec2>> {
+        let goal = self.world_to_grid(to);
+        let start = self.world_to_grid(from);
+        println!("Requestion path from {}/({},{}) to {}/({},{})", from, start.x, start.y, to, goal.x, goal.y);
+
+        let result = astar(
+            &start, 
+            |pos| self.successors(pos),
+            |pos|  pos.distance(&goal) / 3,
+            |pos| *pos == goal
+        );
+
+        if let Some((grid_points, _path_length)) = result {
+            return Some(grid_points.into_iter().map(|pos| self.grid_to_world(pos)).collect::<Vec<Vec2>>());
+        }
+        else {
+            return None;
+        }
+    }
+
+
+    pub fn grid_to_world(&self, pos: GridPos) -> Vec2 {
+        Vec2::new(
+            (self.width / 2) as f32 * -self.tile_size + (pos.x as f32 * self.tile_size), 
+            (self.height / 2) as f32 * -self.tile_size + (pos.y as f32 * self.tile_size)
+        )
+    }
+
+    pub fn world_to_grid(&self, pos: Vec2) -> GridPos {
+        GridPos {
+            x: ((pos.x) / self.tile_size).round() as i32 + (self.width as i32 / 2),
+            y: ((pos.y) / self.tile_size).round() as i32 + (self.height as i32 / 2),
+        }
+    }
+
+    fn get_tile(&self, pos: &GridPos) -> TileValue {
+        if pos.x < 0 || pos.y < 0 || pos.x as usize > self.width || pos.y as usize > self.height {
+             return TileValue::Wall; 
+        }
+
+        return self.tiles[pos.x as usize + (pos.y as usize * self.width)].clone();
+    }
+
+    fn test_successor(&self, pos_test: &GridPos, successor_vec: &mut Vec<(GridPos, u32)>){
+        if self.get_tile(pos_test) == TileValue::Empty {successor_vec.push((pos_test.clone(), 1));}
+    }
+
+    fn successors(&self, pos: &GridPos) -> Vec<(GridPos, u32)> {
+        let mut successors = Vec::<(GridPos, u32)>::new();
+        self.test_successor(&GridPos{x: pos.x + 1, y: pos.y}, &mut successors);
+        self.test_successor(&GridPos{x: pos.x - 1, y: pos.y}, &mut successors);
+        self.test_successor(&GridPos{x: pos.x, y: pos.y + 1}, &mut successors);
+        self.test_successor(&GridPos{x: pos.x, y: pos.y - 1}, &mut successors);
+        return successors;
+    }
 }
 
 pub struct LevelGeo {
@@ -77,11 +150,9 @@ pub fn level_builder_system(
     if let Ok((mut level_state, level_data, mut level_geo)) = level_query.single_mut() {
         if level_state.built { return; }
 
-        let tile_size = 50.0;
-
         let mut level_polygons = Vec::<Polygon<f64>>::new();
 
-        let offset = Vec2::new((level_data.width / 2) as f32 * -tile_size, (level_data.height / 2) as f32 * -tile_size);
+        let offset = Vec2::new((level_data.width / 2) as f32 * -level_data.tile_size, (level_data.height / 2) as f32 * -level_data.tile_size);
 
         for y in 0..level_data.height {
             for x in 0..level_data.width {
@@ -91,8 +162,8 @@ pub fn level_builder_system(
                         &mut materials, 
                         &rapier_config, 
                         &mut level_polygons,
-                        offset + Vec2::new(tile_size * x as f32, tile_size * y as f32), 
-                        Vec2::new(tile_size, tile_size));
+                        offset + Vec2::new(level_data.tile_size * x as f32, level_data.tile_size * y as f32), 
+                        Vec2::new(level_data.tile_size, level_data.tile_size));
                 }
             }
         }
@@ -118,5 +189,5 @@ fn gen_level_tiles(width: usize, height: usize) -> LevelTiles {
             );
         }
     }
-    LevelTiles { width, height, tiles }
+    LevelTiles { width, height, tile_size: 50.0, tiles }
 }

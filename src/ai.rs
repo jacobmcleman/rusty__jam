@@ -8,10 +8,19 @@ use nalgebra::{point, vector};
 
 use crate::player;
 use crate::lighting;
+use crate::level;
 
 pub struct Facing {
     pub angle: f32,
     pub turn_rate: f32
+}
+
+fn angle_clamp(angle: f32) -> f32 {
+    let mut a = angle;
+    if a > std::f32::consts::PI { a -= std::f32::consts::TAU}
+    if a < -std::f32::consts::PI { a += std::f32::consts::TAU}
+
+    return a;
 }
 
 impl Facing {
@@ -31,6 +40,12 @@ impl Facing {
     pub fn turn(&mut self, direction: f32, turn_rate_mult: f32) {
         let change_amt = direction.signum() * self.turn_rate * turn_rate_mult;
         self.angle += change_amt;
+    }
+    pub fn set(&mut self, target_angle: f32) {
+        self.angle = target_angle;
+    }
+    pub fn set_forward(&mut self, target_forward: Vec2) {
+        self.set(Vec2::angle_between(Vec2::new(0.0, 0.0), target_forward));
     }
 }
 
@@ -58,6 +73,8 @@ pub struct AiMovement {
     pub move_speed: f32,
     move_to_target: bool,
     target_position: Vec2,
+    current_path: Vec<Vec2>,
+    path_index: usize
 }
 
 impl AiMovement {
@@ -65,7 +82,9 @@ impl AiMovement {
         AiMovement {
             move_speed,
             move_to_target: true,
-            target_position: Vec2::new(0.0, 0.0)
+            target_position: Vec2::new(0.0, 0.0),
+            current_path: vec![],
+            path_index: 0,
         }
     }
 
@@ -202,27 +221,49 @@ pub fn ai_perception_system (
 pub fn ai_movement_system(
     rapier_parameters: Res<RapierConfiguration>,
     time: Res<Time>,
-    mut query: Query<(&mut AiMovement, &mut RigidBodyVelocity, &mut Facing, &Transform)>
+    mut query: Query<(&mut AiMovement, &mut RigidBodyVelocity, &mut Facing, &Transform)>,
+    level_query: Query<&level::LevelTiles>,
 ) {
-    for(mut mover, mut rb_vel, mut facing, transform) in query.iter_mut() {
-        if !mover.move_to_target { 
-            rb_vel.linvel = vector![0.0, 0.0];
-            continue; 
-        }
+    if let Ok(level) = level_query.single() {
+        for(mut mover, mut rb_vel, mut facing, transform) in query.iter_mut() {
+            if !mover.move_to_target { 
+                rb_vel.linvel = vector![0.0, 0.0];
+                continue; 
+            }
+        
+            if mover.current_path.is_empty()                                                    // No path
+                || mover.path_index >= mover.current_path.len()                                 // Run out of path but still thinks need to move
+                || mover.current_path.last().unwrap().distance(mover.target_position) > 60.0    // Last point in path is stale 
+                // Safe to unwrap last since previous check covers the empty case
+            { 
+                println!("Requesting new path from {} to {}...", transform.translation.xy(), mover.target_position);
+                // path is stale or non-existent, need to request a new one
+                if let Some(path) = level.get_path(transform.translation.xy(), mover.target_position) {
+                    println!("Recieved new path of length {}", path.len());
+                    mover.current_path = path;
+                    mover.path_index = 0;
+                }
+            }
 
-        let vec_to_target =  mover.target_position - transform.translation.xy();
-        let distance_to_target = vec_to_target.length();
+            let vec_to_target =  mover.target_position - transform.translation.xy();
+            let distance_to_target = vec_to_target.length();
+            
 
-        if distance_to_target < 50.0 {
-            mover.move_to_target = false;
-        }
-        else {
-            // For now, this just dumb zombie moves towards the target
-            facing.turn_towards_direction(vec_to_target, time.delta_seconds());
-            let target_dot = vec_to_target.normalize().dot(facing.forward()).clamp(0.0, 1.0);
+            if distance_to_target < 25.0 {
+                mover.move_to_target = false;
+            }
+            else {
+                // Move along path
+                let next_point = mover.current_path[mover.path_index];
+                if transform.translation.xy().distance(next_point) < 20.0 {
+                    println!("Reached node {}/{} in path...", mover.path_index, mover.current_path.len());
+                    mover.path_index += 1;
+                }
 
-            let movement = target_dot * facing.forward() * (1.0 / rapier_parameters.scale) * mover.move_speed;
-            rb_vel.linvel = vector![movement.x, movement.y];
+                let to_next_point = next_point - transform.translation.xy();
+                let movement = to_next_point.normalize() * (1.0 / rapier_parameters.scale) * mover.move_speed;
+                rb_vel.linvel = vector![movement.x, movement.y];
+            }
         }
     }
 }
@@ -234,7 +275,6 @@ pub fn ai_chase_behavior_system (
     for(mut mover, perciever, mut facing) in query.iter_mut() {
         if perciever.can_see_target {
             mover.move_to(perciever.target_position);
-            //facing.turn_towards(perciever.target_direction, time.delta_seconds());
         } 
         else if !mover.is_moving(){
             facing.turn(1.0, time.delta_seconds());
