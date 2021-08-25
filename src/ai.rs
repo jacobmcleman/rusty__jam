@@ -15,14 +15,6 @@ pub struct Facing {
     pub turn_rate: f32
 }
 
-fn angle_clamp(angle: f32) -> f32 {
-    let mut a = angle;
-    if a > std::f32::consts::PI { a -= std::f32::consts::TAU}
-    if a < -std::f32::consts::PI { a += std::f32::consts::TAU}
-
-    return a;
-}
-
 impl Facing {
     pub fn new(turn_rate: f32) -> Facing {
         Facing{ angle: 0.0, turn_rate }
@@ -31,21 +23,35 @@ impl Facing {
         Vec2::new(f32::cos(self.angle), f32::sin(self.angle))
     }
     pub fn turn_towards(&mut self, target_angle: f32, turn_rate_mult: f32) {
-        let change_amt = (target_angle - self.angle).max(self.turn_rate * turn_rate_mult);
+        let mut target = target_angle;
+        if target < -std::f32::consts::PI { 
+            target += std::f32::consts::TAU;
+            self.angle +=  std::f32::consts::TAU;
+        };
+        if target > std::f32::consts::PI { 
+            target -= std::f32::consts::TAU;
+            self.angle -=  std::f32::consts::TAU;
+        }
+        let needed_turn = target - self.angle;
+        if needed_turn.abs() > std::f32::consts::PI {
+            self.angle += std::f32::consts::TAU.copysign(needed_turn);
+        }
+        let change_amt = needed_turn.abs().min(self.turn_rate * turn_rate_mult).copysign(needed_turn);
         self.angle += change_amt;
     }
     pub fn turn_towards_direction(&mut self, target_forward: Vec2, turn_rate_mult: f32) {
-        self.turn_towards(Vec2::angle_between(Vec2::new(0.0, 0.0), target_forward), turn_rate_mult);
+        self.turn_towards(target_forward.y.atan2(target_forward.x), turn_rate_mult);
     }
     pub fn turn(&mut self, direction: f32, turn_rate_mult: f32) {
         let change_amt = direction.signum() * self.turn_rate * turn_rate_mult;
         self.angle += change_amt;
-    }
-    pub fn set(&mut self, target_angle: f32) {
-        self.angle = target_angle;
-    }
-    pub fn set_forward(&mut self, target_forward: Vec2) {
-        self.set(Vec2::angle_between(Vec2::new(0.0, 0.0), target_forward));
+
+        if self.angle > std::f32::consts::PI { 
+            self.angle -=  std::f32::consts::TAU;
+        }
+        else if self.angle < -std::f32::consts::PI { 
+            self.angle +=  std::f32::consts::TAU;
+        }
     }
 }
 
@@ -141,8 +147,8 @@ pub fn setup_test_ai_perception(mut commands: Commands,
         ..Default::default()
     })
     .insert(ColliderPositionSync::Discrete)
-    .insert(Facing::new(std::f32::consts::FRAC_PI_4))
-    .insert(AiPerception::new(250.0, f32::to_radians(30.0)))
+    .insert(Facing::new(std::f32::consts::FRAC_PI_2))
+    .insert(AiPerception::new(500.0, f32::to_radians(25.0)))
     .insert(AiMovement::new(150.0))
     .insert(AiChaseBehavior{})
     .insert(AiPerceptionDebugIndicator{})
@@ -158,7 +164,7 @@ pub fn setup_test_ai_perception(mut commands: Commands,
         visible: Visible { is_transparent: true, is_visible: true },
         ..Default::default()
     })
-    .insert(lighting::SpotLight::new(f32::to_radians(30.0), Color::RED, 250.0))
+    .insert(lighting::SpotLight::new(f32::to_radians(25.0), Color::RED, 500.0))
     .id();
 
     commands.entity(test_enemy).push_children(&[vision_spotlight]);
@@ -236,10 +242,8 @@ pub fn ai_movement_system(
                 || mover.current_path.last().unwrap().distance(mover.target_position) > 60.0    // Last point in path is stale 
                 // Safe to unwrap last since previous check covers the empty case
             { 
-                println!("Requesting new path from {} to {}...", transform.translation.xy(), mover.target_position);
                 // path is stale or non-existent, need to request a new one
                 if let Some(path) = level.get_path(transform.translation.xy(), mover.target_position) {
-                    println!("Recieved new path of length {}", path.len());
                     mover.current_path = path;
                     mover.path_index = 0;
                 }
@@ -256,12 +260,16 @@ pub fn ai_movement_system(
                 // Move along path
                 let next_point = mover.current_path[mover.path_index];
                 if transform.translation.xy().distance(next_point) < 20.0 {
-                    println!("Reached node {}/{} in path...", mover.path_index, mover.current_path.len());
                     mover.path_index += 1;
                 }
 
-                let to_next_point = next_point - transform.translation.xy();
-                let movement = to_next_point.normalize() * (1.0 / rapier_parameters.scale) * mover.move_speed;
+                let to_next_point = (next_point - transform.translation.xy()).normalize();
+                //facing.set_forward(to_next_point);
+                facing.turn_towards_direction(to_next_point, time.delta_seconds());
+                let target_factor = to_next_point.normalize().dot(facing.forward()).clamp(0.0, 1.0).powi(2);
+
+
+                let movement = facing.forward() * target_factor * (1.0 / rapier_parameters.scale) * mover.move_speed;
                 rb_vel.linvel = vector![movement.x, movement.y];
             }
         }

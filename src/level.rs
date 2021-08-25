@@ -33,8 +33,6 @@ impl LevelTiles {
     pub fn get_path(&self, from: Vec2, to: Vec2) -> Option<Vec<Vec2>> {
         let goal = self.world_to_grid(to);
         let start = self.world_to_grid(from);
-        println!("Requestion path from {}/({},{}) to {}/({},{})", from, start.x, start.y, to, goal.x, goal.y);
-
         let result = astar(
             &start, 
             |pos| self.successors(pos),
@@ -73,16 +71,24 @@ impl LevelTiles {
         return self.tiles[pos.x as usize + (pos.y as usize * self.width)].clone();
     }
 
-    fn test_successor(&self, pos_test: &GridPos, successor_vec: &mut Vec<(GridPos, u32)>){
-        if self.get_tile(pos_test) == TileValue::Empty {successor_vec.push((pos_test.clone(), 1));}
+    fn test_successor(&self, pos_test: &GridPos, successor_vec: &mut Vec<(GridPos, u32)>) -> bool{
+        if self.get_tile(pos_test) == TileValue::Empty {
+            successor_vec.push((pos_test.clone(), 1));
+            return true;
+        }
+        return false;
     }
 
     fn successors(&self, pos: &GridPos) -> Vec<(GridPos, u32)> {
         let mut successors = Vec::<(GridPos, u32)>::new();
-        self.test_successor(&GridPos{x: pos.x + 1, y: pos.y}, &mut successors);
-        self.test_successor(&GridPos{x: pos.x - 1, y: pos.y}, &mut successors);
-        self.test_successor(&GridPos{x: pos.x, y: pos.y + 1}, &mut successors);
-        self.test_successor(&GridPos{x: pos.x, y: pos.y - 1}, &mut successors);
+        let east = self.test_successor(&GridPos{x: pos.x + 1, y: pos.y}, &mut successors);
+        let west = self.test_successor(&GridPos{x: pos.x - 1, y: pos.y}, &mut successors);
+        let north = self.test_successor(&GridPos{x: pos.x, y: pos.y + 1}, &mut successors);
+        let south = self.test_successor(&GridPos{x: pos.x, y: pos.y - 1}, &mut successors);
+        if east && north { self.test_successor(&GridPos{x: pos.x + 1, y: pos.y + 1}, &mut successors); }
+        if east && south { self.test_successor(&GridPos{x: pos.x + 1, y: pos.y - 1}, &mut successors); }
+        if west && north { self.test_successor(&GridPos{x: pos.x - 1, y: pos.y + 1}, &mut successors); }
+        if west && south { self.test_successor(&GridPos{x: pos.x - 1, y: pos.y - 1}, &mut successors); }
         return successors;
     }
 }
