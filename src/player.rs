@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*};
 use bevy_rapier2d::prelude::*;
 use nalgebra::{Vector2, vector};
 
@@ -52,6 +52,8 @@ pub fn player_shoot_system(
 ) {
     if let Ok((player, transform)) = query.single() {
         if keyboard_input.just_pressed(KeyCode::Space) {
+            println!("player position: {}", transform.translation);
+
             commands.spawn()
                 .insert(particles::BurstParticleEmitter {
                     quantity: 50
@@ -98,9 +100,11 @@ pub fn setup_player(
     })
     .insert_bundle(ColliderBundle {
         position: [collider_size_x / 2.0, collider_size_y / 2.0].into(),
+        shape: ColliderShape::ball(collider_size_x * 0.5),
         ..Default::default()
     })
     .insert(ColliderPositionSync::Discrete)
     .insert(PlayerMovement {speed: 200.0})
-    .insert(PlayerShooting {smoke_mat: materials.add(Color::rgb(0.0, 0.3, 0.5).into())});
+    .insert(PlayerShooting {smoke_mat: materials.add(Color::rgb(0.0, 0.3, 0.5).into())})
+    ;
 }
