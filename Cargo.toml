@@ -9,3 +9,7 @@ edition = "2018"
 bevy = "0.5"
 bevy_rapier2d = "0.11.0"
 rand = "*"
+geo = "0.18.0"
+geo-visibility = { git = 'https://github.com/lelongg/geo-visibility', branch = 'dependabot/cargo/geo-clipper-0.7.0' }
+geo-clipper = "0.7"
+pathfinding = "2.2.1"
