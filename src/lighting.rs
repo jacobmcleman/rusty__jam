@@ -1,5 +1,6 @@
 use bevy::{math::Vec3Swizzles, prelude::*, render::{pipeline::{BlendOperation, PipelineDescriptor}, shader::{ShaderStage, ShaderStages}}};
 use geo::coords_iter::CoordsIter;
+use geo::{Coordinate, Polygon};
 
 use crate::level;
 use crate::ai::Facing;
@@ -28,11 +29,36 @@ pub struct SpotLight {
     pub reach: f32
 }
 
-pub struct TestSpin {}
-
 impl SpotLight {
     pub fn new(angle: f32, color: Color, reach: f32) -> SpotLight {
         SpotLight{mesh_built: false, color, angle, reach}
+    }
+}
+
+pub struct TestSpin {}
+
+pub struct DynamicLightBlocker {
+    pub size: f32
+}
+
+impl DynamicLightBlocker {
+    fn get_poly(&self, position: Vec2) -> Polygon<f64> {
+        geo::Rect::new(
+            level::bevy_vec2_to_geo_coord(position + Vec2::new(-0.5 * self.size,-0.5 * self.size)),
+            level::bevy_vec2_to_geo_coord(position + Vec2::new(0.5 * self.size,0.5 * self.size)),
+        ).into()
+    }
+}
+
+pub fn dynamic_light_blocking_system(
+    mut level_query: Query<&mut level::LevelGeo>,
+    blocker_query: Query<(&DynamicLightBlocker, &Transform)>
+) {
+    if let Ok(mut level) = level_query.single_mut() {
+        level.reset_temps_for_next_frame();
+        for (blocker, transform) in blocker_query.iter() {
+            level.temp_block(blocker.get_poly(transform.translation.xy()));
+        }
     }
 }
 
@@ -83,12 +109,12 @@ fn build_mesh_for_vis_poly_cone(poly: &geo::Polygon<f64>, mesh: &mut Mesh, cente
 pub fn point_light_mesh_builder(
     mut query: Query<(&mut PointLight, &GlobalTransform, &mut Handle<Mesh>)>,
     mut meshes: ResMut<Assets<Mesh>>,
-    level_query: Query<&level::LevelGeo>
+    mut level_query: Query<&mut level::LevelGeo>
 ) {
-    if let Ok(level_geo) = level_query.single() {
+    if let Ok(mut level_geo) = level_query.single_mut() {
         for (mut light, transform, mesh_handle) in query.iter_mut() {
             let center: Vec2 = transform.translation.xy();
-            let vis_polygon = level::get_visibility_polygon(&level_geo, center);
+            let vis_polygon = level::get_visibility_polygon(&mut level_geo, center);
             if let Some(mesh) = meshes.get_mut(mesh_handle.id) {
                 build_mesh_for_vis_poly(&vis_polygon, mesh, center, transform.translation.z, light.color, light.reach);
                 light.mesh_built = true;
@@ -101,13 +127,13 @@ pub fn spotlight_mesh_builder(
     mut query: Query<(&mut SpotLight, &GlobalTransform, &Parent, &mut Handle<Mesh>)>,
     parent_query: Query<&Facing, With<Children>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    level_query: Query<&level::LevelGeo>
+    mut level_query: Query<&mut level::LevelGeo>
 ) {
-    if let Ok(level_geo) = level_query.single() {
+    if let Ok(mut level_geo) = level_query.single_mut() {
         for (mut light, transform, parent, mesh_handle) in query.iter_mut() {
             if let Ok(facing) = parent_query.get(parent.0) {
-                let center: Vec2 = transform.translation.xy();
-                let vis_polygon = level::get_visibility_polygon(&level_geo, center);
+                let center: Vec2 = transform.translation.xy() + facing.forward() * 20.0;
+                let vis_polygon = level::get_visibility_polygon(&mut level_geo, center);
                 if let Some(mesh) = meshes.get_mut(mesh_handle.id) {
                     //build_mesh_for_vis_poly(&vis_polygon, mesh, center, transform.translation.z, light.color, light.reach);
                     build_mesh_for_vis_poly_cone(&vis_polygon, mesh, center, transform.translation.z, light.color, light.reach, facing.angle, light.angle);

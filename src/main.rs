@@ -44,9 +44,10 @@ fn main() {
         .add_system(ai::ai_chase_behavior_system.system())
         .add_system(ai::ai_perception_debug_system.system())
         .add_startup_system(lighting::light_setup_system.system().label("graphics_init"))
-        .add_system(lighting::point_light_mesh_builder.system())
-        .add_system(lighting::spotlight_mesh_builder.system())
+        .add_system(lighting::point_light_mesh_builder.system().after("light_setup"))
+        .add_system(lighting::spotlight_mesh_builder.system().after("light_setup"))
         .add_system(lighting::test_spin_system.system())
+        .add_system(lighting::dynamic_light_blocking_system.system().label("light_setup"))
         .run();
 }
 

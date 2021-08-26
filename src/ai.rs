@@ -168,6 +168,7 @@ fn spawn_enemy(commands: &mut Commands,
     .insert(AiMovement::new(150.0))
     .insert(AiChaseBehavior{})
     .insert(AiPerceptionDebugIndicator{})
+    .insert(crate::lighting::DynamicLightBlocker{size: 25.0})
     .id();
 
     let mesh = meshes.add(render_data.base_mesh.clone().unwrap());
