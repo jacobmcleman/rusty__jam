@@ -105,7 +105,7 @@ pub fn setup_environment(
     mut commands: Commands,
 ) {
     commands.spawn()
-        .insert(gen_level_tiles(16, 16))
+        .insert(gen_level_tiles(24, 24))
         .insert(LevelState{built:false})
         .insert(LevelGeo{blocks: MultiPolygon(vec![])});
 
@@ -190,7 +190,7 @@ fn gen_level_tiles(width: usize, height: usize) -> LevelTiles {
     for y in 0..height {
         for x in 0..width {
             tiles.push(
-                if (x * y) % 4 == 1 || x * y == 0 || x == width - 1 || y == height - 1 {TileValue::Wall} 
+                if (((x * y) % 3 == 1) && ((x * y / 3) % 4 == 1)) || x * y == 0 || x == width - 1 || y == height - 1 {TileValue::Wall} 
                 else {TileValue::Empty}
             );
         }
