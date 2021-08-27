@@ -48,7 +48,8 @@ pub struct LevelTiles {
     width: usize,
     height: usize,
     tile_size: f32,
-    tiles: Vec<TileValue>
+    tiles: Vec<TileValue>,
+    next_level: String,
 }
 
 impl AssetLoader for LevelTiles {
@@ -62,23 +63,37 @@ impl AssetLoader for LevelTiles {
             let mut width = 0;
             let mut height = 0;
             let mut index = 0;
+            let mut next_level: String = "".to_string();
+            let mut read_name = true;
             for byte in bytes {
-                match *byte as char {
-                    ' ' => { tiles.push(TileValue::Empty); index += 1; },
-                    '#' => { tiles.push(TileValue::Wall); index += 1; },
-                    '$' => { tiles.push(TileValue::Pickup); index += 1; },
-                    'V' => { tiles.push(TileValue::Player); index += 1; },
-                    'X' => { tiles.push(TileValue::Enemy); index += 1; },
-                    '\n' => {
-                        if width == 0 { width = index; }
-                        height += 1;
-                    },
-                    _ => ()
+                if read_name {
+                    let character = *byte as char;
+                    if character == '\n' {
+                        read_name = false;
+                        println!("Next Level will be {}", next_level);
+                    }
+                    else {
+                        next_level.push( *byte as char);
+                    }
+                    
                 }
-                
+                else{
+                    match *byte as char {
+                        ' ' => { tiles.push(TileValue::Empty); index += 1; },
+                        '#' => { tiles.push(TileValue::Wall); index += 1; },
+                        '$' => { tiles.push(TileValue::Pickup); index += 1; },
+                        'V' => { tiles.push(TileValue::Player); index += 1; },
+                        'X' => { tiles.push(TileValue::Enemy); index += 1; },
+                        '\n' => {
+                            if width == 0 { width = index; }
+                            height += 1;
+                        },
+                        _ => ()
+                    }
+                }
             }
 
-            load_context.set_default_asset(LoadedAsset::new(LevelTiles{width, height, tile_size: 50.0, tiles}));
+            load_context.set_default_asset(LoadedAsset::new(LevelTiles{width, height, tile_size: 50.0, tiles, next_level}));
             Ok(())
         })
     }
@@ -180,8 +195,11 @@ pub struct LevelState {
 pub fn setup_environment(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    current_level: Res<crate::gamestate::CurrentLevel>,
 ) {
-    let level_handle: Handle<LevelTiles> = asset_server.load("levels/test.level");
+    let level_path = "levels/".to_string() + &current_level.name + ".level";
+    println!("Preparing level: {}", level_path);
+    let level_handle: Handle<LevelTiles> = asset_server.load(&level_path as &str);
     spawn_level(&mut commands, level_handle);
 }
 
@@ -309,5 +327,5 @@ fn _gen_level_tiles(width: usize, height: usize) -> LevelTiles {
             );
         }
     }
-    LevelTiles { width, height, tile_size: 50.0, tiles }
+    LevelTiles { width, height, tile_size: 50.0, tiles, next_level: "".to_string() }
 }

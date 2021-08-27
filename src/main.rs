@@ -27,6 +27,7 @@ fn main() {
         })
         .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
         .insert_resource(gamestate::Score{value: 0})
+        .insert_resource(gamestate::CurrentLevel{name: "test copy".to_string()})
         .add_plugins(DefaultPlugins)
         .add_state(GameState::Startup)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
