@@ -344,8 +344,8 @@ pub fn ai_perception_debug_system (
     mut query: Query<(&AiPerception, &AiPerceptionDebugIndicator, &mut Handle<ColorMaterial>)>,
     mut light_query: Query<(&Parent, &mut lighting::SpotLight)>
 ) {
-    let see_color =Color::rgb(1.0, 0.0, 0.0);
-    let cant_color = Color::rgb(0.0,1.0,0.0);
+    let see_color =Color::rgb(0.8,0.35,0.2);
+    let cant_color = Color::rgb(0.2,0.7,0.8);
 
     for (perciever, _indicator, mat_handle) in query.iter_mut() {
         if let Some(mut color_mat) = materials.get_mut(mat_handle.id) {

@@ -86,7 +86,7 @@ pub fn player_shoot_system(
                     speed_min: 20.0,
                     speed_max: 250.0,
                     particle_drag: 4.0,
-                    particle_size: Vec2::new(20.0, 20.0),
+                    particle_size: Vec2::new(30.0, 30.0),
                     lifetime_min: 8.0,
                     lifetime_max: 15.0,
                     material: player.smoke_mat.clone(),
@@ -133,6 +133,7 @@ pub fn spawn_player(
 ) {
     // Load sprite
     let circle_texture_handle: Handle<Texture> = asset_server.load("sprites/circle.png");
+    let smoke_texture_handle: Handle<Texture> = asset_server.load("sprites/smoke.png");
 
     let sprite_size_x = 40.0;
     let sprite_size_y = 40.0;
@@ -158,7 +159,7 @@ pub fn spawn_player(
     })
     .insert(ColliderPositionSync::Discrete)
     .insert(PlayerMovement {speed: 200.0})
-    .insert(PlayerShooting {smoke_mat: materials.add(Color::rgb(0.0, 0.3, 0.5).into())})
+    .insert(PlayerShooting {smoke_mat: materials.add(smoke_texture_handle.into())})
     .insert(crate::lighting::DynamicLightBlocker{size: 20.0})
     .insert( CamFollow{position: Vec2::default()})
     ;
@@ -174,6 +175,8 @@ fn process_collision_events(
     player_query: Query<Entity, With<PlayerMovement>>,
     enemy_query: Query<Entity, With<crate::ai::AiPerception>>,
     pickup_query: Query<(Entity, &Pickup), With<Pickup>>,
+    asset_server: Res<AssetServer>, 
+    audio: Res<Audio>
 ) {
     for intersection_event in intersection_events.iter() {
         if player_query.get(intersection_event.collider1.entity()).is_ok() {
@@ -186,6 +189,9 @@ fn process_collision_events(
             if let Ok(pair) = pickup_query.get(intersection_event.collider1.entity()) {
                 score.value += pair.1.value;
                 commands.entity(pair.0).despawn_recursive();
+
+                let fx = asset_server.load("audio/sfx/Stutter_Beep.mp3");
+                audio.play(fx);
             }
         }
     }
@@ -201,6 +207,8 @@ fn process_collision_events(
                 let is_enemy_involved = contact1_enemy || contact2_enemy;
                 if is_enemy_involved && is_player_involved {
                     state.set(GameState::GameOver).unwrap();
+                    let fx = asset_server.load("audio/sfx/deathSound.mp3");
+                    audio.play(fx);
                     return;
                 }
             }

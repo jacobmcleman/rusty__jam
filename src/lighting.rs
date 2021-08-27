@@ -1,8 +1,8 @@
-use bevy::{math::Vec3Swizzles, prelude::*, render::{camera::OrthographicProjection, pipeline::{BlendOperation, PipelineDescriptor}, shader::{ShaderStage, ShaderStages}}, tasks::ComputeTaskPool};
+use bevy::{math::Vec3Swizzles, prelude::*, render::{pipeline::{BlendOperation, PipelineDescriptor}, shader::{ShaderStage, ShaderStages}}, tasks::ComputeTaskPool};
 use geo::coords_iter::CoordsIter;
 use geo::{Polygon,};
 
-use crate::{MainCam, level};
+use crate::{level};
 use crate::ai::Facing;
 
 pub struct LightingPlugin;
@@ -168,7 +168,7 @@ pub fn point_light_mesh_builder(
     }
 }
 
-fn circle_intersect_rect(r: f32, center: Vec2, corner_a: Vec2, corner_b: Vec2) -> bool{
+fn _circle_intersect_rect(r: f32, center: Vec2, corner_a: Vec2, corner_b: Vec2) -> bool{
     let closest_point_to_circle_in_rect = Vec2::new(
         corner_a.x.max(corner_b.x.min(center.x)),
         corner_a.y.max(corner_b.y.min(center.y)),
@@ -179,27 +179,19 @@ fn circle_intersect_rect(r: f32, center: Vec2, corner_a: Vec2, corner_b: Vec2) -
 
 pub fn spotlight_mesh_builder(
     mut query: Query<(&mut SpotLight, &GlobalTransform, &Parent, &mut LightMeshData)>,
-    cam_query: Query<(&Transform, &OrthographicProjection), With<MainCam>>,
     parent_query: Query<&Facing, With<Children>>,
     level_query: Query<&level::LevelGeo>,
     task_pool: Res<ComputeTaskPool>,
 ) {
-    if let Ok((cam_transform, cam_ortho)) = cam_query.single() {
-        let cam_upper_left = cam_transform.translation.xy() + Vec2::new(cam_ortho.left, cam_ortho.top);
-        let cam_lower_right = cam_transform.translation.xy() + Vec2::new(cam_ortho.right, cam_ortho.bottom);
-        if let Ok(level_geo) = level_query.single() {
-            query.par_for_each_mut(&task_pool, 1, |(mut light, transform, parent, mut mesh_data)| {
-                if let Ok(facing) = parent_query.get(parent.0) {
-                    let center: Vec2 = transform.translation.xy() + facing.forward() * 20.0;
-                    // Check if there is any chance of it being visible at all
-                    if circle_intersect_rect(light.reach, center, cam_upper_left, cam_lower_right) {
-                        let vis_polygon = level::get_visibility_polygon(&level_geo, center);
-                        build_mesh_for_vis_poly_cone(&vis_polygon, &mut mesh_data, center, transform.translation.z, light.color, light.reach, facing.angle, light.angle);
-                        light.mesh_built = true;
-                    }
-                }
-            });
-        }
+    if let Ok(level_geo) = level_query.single() {
+        query.par_for_each_mut(&task_pool, 1, |(mut light, transform, parent, mut mesh_data)| {
+            if let Ok(facing) = parent_query.get(parent.0) {
+                let center: Vec2 = transform.translation.xy() + facing.forward() * 20.0;
+                let vis_polygon = level::get_visibility_polygon(&level_geo, center);
+                build_mesh_for_vis_poly_cone(&vis_polygon, &mut mesh_data, center, transform.translation.z, light.color, light.reach, facing.angle, light.angle);
+                light.mesh_built = true;
+            }
+        });
     }
 }
 

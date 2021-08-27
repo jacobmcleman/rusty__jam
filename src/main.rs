@@ -1,6 +1,5 @@
 use bevy::{
     prelude::*, 
-    render::camera::Camera, 
     window::WindowMode,
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
 };
@@ -22,10 +21,10 @@ pub struct MainCam;
 fn main() {
     App::build()
         .insert_resource(WindowDescriptor {
-            title: "Rusty Jam".to_string(),
+            title: "Smoke and Mirrors".to_string(),
             width: 1024.,
             height: 720.,
-            vsync: false,
+            vsync: true,
             resizable: true,
             mode: WindowMode::Windowed,
             ..Default::default()
@@ -53,6 +52,9 @@ fn main() {
             SystemSet::on_enter(GameState::Startup).with_system(startup_setup.system()),
         )
         .add_system_set(
+            SystemSet::on_enter(GameState::Playing).with_system(setup_playing.system()),
+        )
+        .add_system_set(
             SystemSet::on_update(GameState::Startup).with_system(gamestate::startgame_keyboard.system()),
         )
         .add_system_set(
@@ -69,35 +71,64 @@ fn main() {
 fn startup_setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    commands
-        .spawn_bundle(NodeBundle {
+    commands.spawn_bundle(TextBundle {
+        text: Text {
+            sections: vec![
+                TextSection {
+                    value: "Smoke & Mirrors".to_string(),
+                    style: TextStyle {
+                                font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                            font_size: 80.0,
+                            color: Color::rgb(0.6, 0.6, 1.0)
+                        },
+                    },
+                    TextSection {
+                        value: "\nBuilt by Aevek in 1 week".to_string(),
+                        style: TextStyle {
+                            font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                            font_size: 60.0,
+                            color: Color::rgb(0.4, 0.4, 1.0)
+                        },
+                    },
+                    TextSection {
+                        value: "\n[Space] to start game\n[Esc] to quit".to_string(),
+                        style: TextStyle {
+                            font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                            font_size: 40.0,
+                            color: Color::rgb(0.4, 0.4, 1.0)
+                        },
+                    },
+                    TextSection {
+                        value: "\n\nObjective:\nCollect as many coins as you can without being caught.".to_string(),
+                        style: TextStyle {
+                            font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                            font_size: 40.0,
+                            color: Color::rgb(0.4, 0.4, 1.0)
+                        },
+                    },
+                    TextSection {
+                        value: "\n\nControls:\n[WASD] to move\n[Space] to drop smoke bomb".to_string(),
+                        style: TextStyle {
+                            font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                            font_size: 40.0,
+                            color: Color::rgb(0.4, 0.4, 1.0)
+                        },
+                    },
+                ],
+                 ..Default::default()
+            },
             style: Style {
-                margin: Rect::all(Val::Auto),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
+                position_type: PositionType::Absolute,
+                position: Rect {
+                    top: Val::Px(5.0),
+                    left: Val::Px(5.0),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
-            material: materials.add(Color::NONE.into()),
             ..Default::default()
-        })
-        .with_children(|parent| {
-            parent.spawn_bundle(TextBundle {
-                text: Text::with_section(
-                    format!("Press [Space] to Start Game\n[Esc] to quit"),
-                    TextStyle {
-                        font: asset_server.load("fonts/Roboto-Regular.ttf"),
-                        font_size: 80.0,
-                        color: Color::rgb(0.5, 0.5, 1.0),
-                    },
-                    Default::default(),
-                ),
-                ..Default::default()
-            });
-        });
-
-        
+    });
 }
 
 struct DiagText;
@@ -121,34 +152,50 @@ fn screen_text(
 fn gameover_setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
     mut score: ResMut<Score>,
 ) {
     commands
-        .spawn_bundle(NodeBundle {
-            style: Style {
-                margin: Rect::all(Val::Auto),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..Default::default()
-            },
-            material: materials.add(Color::NONE.into()),
-            ..Default::default()
-        })
-        .with_children(|parent| {
-            parent.spawn_bundle(TextBundle {
-                text: Text::with_section(
-                    format!("Game Over!\nScore: {}\n[Space] to try again\n[Esc] to quit", score.value),
-                    TextStyle {
-                        font: asset_server.load("fonts/Roboto-Regular.ttf"),
-                        font_size: 80.0,
-                        color: Color::rgb(0.5, 0.5, 1.0),
+        .spawn_bundle(TextBundle {
+                text: Text {
+                    sections: vec![
+                        TextSection {
+                            value: "Game Over!".to_string(),
+                            style: TextStyle {
+                                font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                                font_size: 80.0,
+                                color: Color::rgb(0.6, 0.6, 1.0)
+                            },
+                        },
+                        TextSection {
+                            value: format!("\nScore: {}", score.value),
+                            style: TextStyle {
+                                font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                                font_size: 60.0,
+                                color: Color::rgb(0.4, 0.4, 1.0)
+                            },
+                        },
+                        TextSection {
+                            value: "\n[Space] to try again\n[Esc] to quit".to_string(),
+                            style: TextStyle {
+                                font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                                font_size: 40.0,
+                                color: Color::rgb(0.4, 0.4, 1.0)
+                            },
+                        },
+                    ],
+                    ..Default::default()
+                },
+                style: Style {
+                    position_type: PositionType::Absolute,
+                    position: Rect {
+                        top: Val::Px(5.0),
+                        left: Val::Px(5.0),
+                        ..Default::default()
                     },
-                    Default::default(),
-                ),
+                    ..Default::default()
+                },
                 ..Default::default()
             });
-        });
 
         score.value = 0;
 }
@@ -156,7 +203,6 @@ fn gameover_setup(
 fn all_setup(
     mut commands: Commands,
     mut rapier_config: ResMut<RapierConfiguration>,
-    asset_server: Res<AssetServer>,
 ) {
     // Spawn cameras
     commands.spawn_bundle(OrthographicCameraBundle::new_2d())
@@ -168,7 +214,9 @@ fn all_setup(
     // Configure Physics
     rapier_config.scale = 40.0;
     rapier_config.gravity = Vector2::zeros();
+}
 
+fn setup_playing(mut commands: Commands, asset_server: Res<AssetServer>,) {
     commands.spawn_bundle(TextBundle {
         text: Text {
             sections: vec![
@@ -176,32 +224,32 @@ fn all_setup(
                     value: "Collected Count: ".to_string(),
                     style: TextStyle {
                         font: asset_server.load("fonts/Roboto-Regular.ttf"),
-                        font_size: 40.0,
-                        color: Color::rgb(0.0, 1.0, 0.0),
+                        font_size: 30.0,
+                        color: Color::rgb(1.0, 0.7, 0.1),
                     },
                 },
                 TextSection {
                     value: "".to_string(),
                     style: TextStyle {
                         font: asset_server.load("fonts/Roboto-Regular.ttf"),
-                        font_size: 40.0,
-                        color: Color::rgb(0.0, 1.0, 1.0),
+                        font_size: 30.0,
+                        color: Color::rgb(1.0, 0.7, 0.1),
                     },
                 },
                 TextSection {
                     value: "\nAverage FPS: ".to_string(),
                     style: TextStyle {
                         font: asset_server.load("fonts/Roboto-Regular.ttf"),
-                        font_size: 40.0,
-                        color: Color::rgb(0.0, 1.0, 0.0),
+                        font_size: 20.0,
+                        color: Color::rgb(1.0, 1.0, 1.0),
                     },
                 },
                 TextSection {
                     value: "".to_string(),
                     style: TextStyle {
                         font: asset_server.load("fonts/Roboto-Regular.ttf"),
-                        font_size: 40.0,
-                        color: Color::rgb(0.0, 1.0, 1.0),
+                        font_size: 20.0,
+                        color: Color::rgb(1.0, 1.0, 1.0),
                     },
                 },
             ],
@@ -218,8 +266,7 @@ fn all_setup(
         },
         ..Default::default()
     })
-    .insert(DiagText)
-    .insert(Preserve);
+    .insert(DiagText);
 }
 
 fn teardown(mut commands: Commands, entities: Query<Entity, Without<Preserve>>) {

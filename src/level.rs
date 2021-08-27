@@ -49,7 +49,7 @@ pub struct LevelTiles {
     height: usize,
     tile_size: f32,
     tiles: Vec<TileValue>,
-    next_level: String, // TODO: Add win condition so this can do something
+    _next_level: String, // TODO: Add win condition so this can do something
 }
 
 impl AssetLoader for LevelTiles {
@@ -93,7 +93,7 @@ impl AssetLoader for LevelTiles {
                 }
             }
 
-            load_context.set_default_asset(LoadedAsset::new(LevelTiles{width, height, tile_size: 50.0, tiles, next_level}));
+            load_context.set_default_asset(LoadedAsset::new(LevelTiles{width, height, tile_size: 50.0, tiles, _next_level: next_level}));
             Ok(())
         })
     }
@@ -224,7 +224,7 @@ fn create_static_box(commands: &mut Commands,
     let collider_size_y = size.y / rapier_config.scale;
 
     commands.spawn_bundle(SpriteBundle {
-        material: materials.add(Color::rgb(0.5, 0.5, 1.0).into()),
+        material: materials.add(Color::rgb(0.4, 0.3, 0.6).into()),
         sprite: Sprite::new(size),
         ..Default::default()
     })
@@ -327,5 +327,5 @@ fn _gen_level_tiles(width: usize, height: usize) -> LevelTiles {
             );
         }
     }
-    LevelTiles { width, height, tile_size: 50.0, tiles, next_level: "".to_string() }
+    LevelTiles { width, height, tile_size: 50.0, tiles, _next_level: "".to_string() }
 }
