@@ -299,7 +299,7 @@ pub fn get_visibility_polygon(level_geo: &mut LevelGeo, from_point: Vec2) -> Pol
     return point.visibility(&level_geo.get_geo_multipoly());
 }
 
-fn gen_level_tiles(width: usize, height: usize) -> LevelTiles {
+fn _gen_level_tiles(width: usize, height: usize) -> LevelTiles {
     let mut tiles = Vec::<TileValue>::new();
     for y in 0..height {
         for x in 0..width {

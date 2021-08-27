@@ -37,8 +37,6 @@ fn main() {
         .add_plugin(particles::ParticlePlugin)
         .add_startup_system(all_setup.system().label("physics"))
         .add_system_set(SystemSet::on_enter(GameState::Playing)
-            .with_system(player::setup_player.system())
-            .with_system(ai::setup_test_ai_perception.system())
             .with_system(level::setup_environment.system())
         )
         .add_system_set(SystemSet::on_exit(GameState::Startup).with_system(teardown.system()))

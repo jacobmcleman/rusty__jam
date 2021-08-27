@@ -134,19 +134,6 @@ pub struct AiChaseBehavior;
 
 pub struct AiPerceptionDebugIndicator;
 
-pub fn setup_test_ai_perception(mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    rapier_config: Res<RapierConfiguration>,
-    asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    render_data: ResMut<lighting::LightRenderData>,
-) {
-    //spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(50.0, 150.0));
-    //spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(-50.0, -150.0));
-    //spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(150.0, -50.0));
-    //spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(-150.0, 50.0));
-}
-
 pub fn spawn_enemy(commands: &mut Commands,
     materials: &mut ResMut<Assets<ColorMaterial>>,
     rapier_config: &Res<RapierConfiguration>,

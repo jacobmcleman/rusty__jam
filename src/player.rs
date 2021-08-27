@@ -164,14 +164,6 @@ pub fn spawn_player(
     ;
 }
 
-pub fn setup_player(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    rapier_config: Res<RapierConfiguration>,
-    asset_server: Res<AssetServer>,
-) {
-    
-}
 
 fn process_collision_events(
     mut commands: Commands,
