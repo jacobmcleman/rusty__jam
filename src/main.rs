@@ -11,6 +11,8 @@ mod particles;
 mod ai;
 mod lighting;
 
+pub struct MainCam;
+
 fn main() {
     App::build()
         .insert_resource(WindowDescriptor {
@@ -48,6 +50,8 @@ fn main() {
         .add_system(lighting::spotlight_mesh_builder.system().after("light_setup"))
         .add_system(lighting::test_spin_system.system())
         .add_system(lighting::dynamic_light_blocking_system.system().label("light_setup"))
+        .add_system(player::follow_camera_objstep.system())
+        .add_system(player::follow_camera_camstep.system())
         .run();
 }
 
@@ -57,7 +61,8 @@ fn setup(
     mut rapier_config: ResMut<RapierConfiguration>,
 ) {
     // Spawn cameras
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+    commands.spawn_bundle(OrthographicCameraBundle::new_2d())
+        .insert(MainCam );
     commands.spawn_bundle(UiCameraBundle::default());
 
     // Configure Physics

@@ -1,4 +1,4 @@
-use bevy::{prelude::*};
+use bevy::{math::Vec3Swizzles, prelude::*, };
 use bevy_rapier2d::prelude::*;
 use nalgebra::{Vector2, vector};
 
@@ -10,6 +10,10 @@ pub struct PlayerMovement {
 
 pub struct PlayerShooting {
     smoke_mat: Handle<ColorMaterial>,
+}
+
+pub struct CamFollow {
+    pub position: Vec2,
 }
 
 pub fn player_movement_system(
@@ -84,6 +88,26 @@ pub fn player_shoot_system(
     }
 }
 
+pub fn follow_camera_camstep(
+    follow_query: Query<&CamFollow>,
+    mut camera_query: Query<&mut Transform, With<crate::MainCam>>,
+) {
+    if let Ok(follow) = follow_query.single() {
+        if let Ok(mut camera_transform) = camera_query.single_mut() {
+            camera_transform.translation.x = follow.position.x;
+            camera_transform.translation.y = follow.position.y;
+        }
+    }
+}
+
+pub fn follow_camera_objstep(
+    mut follow_query: Query<(&mut CamFollow, &Transform)>,
+) {
+    if let Ok((mut follow, transform)) = follow_query.single_mut() {
+        follow.position = transform.translation.xy();
+    }
+}
+
 pub fn setup_player(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -119,5 +143,6 @@ pub fn setup_player(
     .insert(PlayerMovement {speed: 200.0})
     .insert(PlayerShooting {smoke_mat: materials.add(Color::rgb(0.0, 0.3, 0.5).into())})
     .insert(crate::lighting::DynamicLightBlocker{size: 20.0})
+    .insert( CamFollow{position: Vec2::default()})
     ;
 }
