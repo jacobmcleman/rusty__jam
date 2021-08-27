@@ -141,13 +141,13 @@ pub fn setup_test_ai_perception(mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     render_data: ResMut<lighting::LightRenderData>,
 ) {
-    spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(50.0, 150.0));
-    spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(-50.0, -150.0));
-    spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(150.0, -50.0));
+    //spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(50.0, 150.0));
+    //spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(-50.0, -150.0));
+    //spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(150.0, -50.0));
     //spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(-150.0, 50.0));
 }
 
-fn spawn_enemy(commands: &mut Commands,
+pub fn spawn_enemy(commands: &mut Commands,
     materials: &mut ResMut<Assets<ColorMaterial>>,
     rapier_config: &Res<RapierConfiguration>,
     asset_server: &Res<AssetServer>,
@@ -270,57 +270,61 @@ pub fn ai_movement_system(
     rapier_parameters: Res<RapierConfiguration>,
     time: Res<Time>,
     task_pool: Res<ComputeTaskPool>,
+    levels: Res<Assets<level::LevelTiles>>,
     mut query: Query<(&mut AiMovement, &mut RigidBodyVelocity, &mut Facing, &Transform)>,
-    level_query: Query<&level::LevelTiles>,
+    level_query: Query<&Handle<level::LevelTiles>,>,
 ) {
-    if let Ok(level) = level_query.single() {
-        query.par_for_each_mut(&task_pool, 1, |(mut mover, mut rb_vel, mut facing, transform)| {
-            if !mover.move_to_target { 
-                rb_vel.linvel = vector![0.0, 0.0];
-                return; 
-            }
-        
-            if mover.current_path.is_empty()                                                    // No path
-                || mover.path_index >= mover.current_path.len()                                 // Run out of path but still thinks need to move
-                || mover.current_path.last().unwrap().distance(mover.target_position) > 60.0    // Last point in path is stale 
-                // Safe to unwrap last since previous check covers the empty case
-            { 
-                mover.path_index = 0;
-                // path is stale or non-existent, need to request a new one
-                if let Some(path) = level.get_path(transform.translation.xy(), mover.target_position) {
-                    mover.current_path = path;
-                    
+    
+    if let Ok(level_handle) = level_query.single() {
+        if let Some(level) = levels.get(level_handle){
+            query.par_for_each_mut(&task_pool, 1, |(mut mover, mut rb_vel, mut facing, transform)| {
+                if !mover.move_to_target { 
+                    rb_vel.linvel = vector![0.0, 0.0];
+                    return; 
+                }
+            
+                if mover.current_path.is_empty()                                                    // No path
+                    || mover.path_index >= mover.current_path.len()                                 // Run out of path but still thinks need to move
+                    || mover.current_path.last().unwrap().distance(mover.target_position) > 60.0    // Last point in path is stale 
+                    // Safe to unwrap last since previous check covers the empty case
+                { 
+                    mover.path_index = 0;
+                    // path is stale or non-existent, need to request a new one
+                    if let Some(path) = level.get_path(transform.translation.xy(), mover.target_position) {
+                        mover.current_path = path;
+                        
+                    }
+                    else {
+                        mover.current_path.clear();
+                        mover.move_to_target = false;
+                        return;
+                    }
+                }
+    
+                let vec_to_target =  mover.target_position - transform.translation.xy();
+                let distance_to_target = vec_to_target.length();
+    
+                if distance_to_target < 60.0 {
+                    mover.move_to_target = false;
                 }
                 else {
-                    mover.current_path.clear();
-                    mover.move_to_target = false;
-                    return;
+                    // Move along path
+                    let next_point = mover.current_path[mover.path_index];
+                    if transform.translation.xy().distance(next_point) < 10.0 {
+                        mover.path_index += 1;
+                    }
+    
+                    let to_next_point = (next_point - transform.translation.xy()).normalize();
+                    //facing.set_forward(to_next_point);
+                    facing.turn_towards_direction(to_next_point, time.delta_seconds());
+                    let target_factor = to_next_point.normalize().dot(facing.forward()).clamp(0.0, 1.0).powi(3);
+    
+    
+                    let movement = facing.forward() * target_factor * (1.0 / rapier_parameters.scale) * mover.move_speed;
+                    rb_vel.linvel = vector![movement.x, movement.y];
                 }
-            }
-
-            let vec_to_target =  mover.target_position - transform.translation.xy();
-            let distance_to_target = vec_to_target.length();
-
-            if distance_to_target < 60.0 {
-                mover.move_to_target = false;
-            }
-            else {
-                // Move along path
-                let next_point = mover.current_path[mover.path_index];
-                if transform.translation.xy().distance(next_point) < 10.0 {
-                    mover.path_index += 1;
-                }
-
-                let to_next_point = (next_point - transform.translation.xy()).normalize();
-                //facing.set_forward(to_next_point);
-                facing.turn_towards_direction(to_next_point, time.delta_seconds());
-                let target_factor = to_next_point.normalize().dot(facing.forward()).clamp(0.0, 1.0).powi(3);
-
-
-                let movement = facing.forward() * target_factor * (1.0 / rapier_parameters.scale) * mover.move_speed;
-                rb_vel.linvel = vector![movement.x, movement.y];
-            }
-        });
+            });
+        }
     }
 }
 

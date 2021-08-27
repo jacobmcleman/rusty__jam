@@ -170,20 +170,7 @@ pub fn setup_player(
     rapier_config: Res<RapierConfiguration>,
     asset_server: Res<AssetServer>,
 ) {
-    spawn_player(
-        Vec2::new(200., 500.),
-        &mut commands,
-        &mut materials,
-        &rapier_config,
-        &asset_server,
-    );
-
-    crate::pickup::spawn_pickup(Vec2::new(200., 450.),
-        &mut commands,
-        &mut materials,
-        rapier_config.scale,
-        &asset_server,
-    );
+    
 }
 
 fn process_collision_events(

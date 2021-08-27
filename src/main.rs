@@ -79,7 +79,7 @@ fn startup_setup(
         .with_children(|parent| {
             parent.spawn_bundle(TextBundle {
                 text: Text::with_section(
-                    format!("Press [Space] to Start"),
+                    format!("Press [Space] to Start Game\n[Esc] to quit"),
                     TextStyle {
                         font: asset_server.load("fonts/Roboto-Regular.ttf"),
                         font_size: 80.0,
@@ -113,7 +113,7 @@ fn gameover_setup(
         .with_children(|parent| {
             parent.spawn_bundle(TextBundle {
                 text: Text::with_section(
-                    format!("Game Over!\nScore: {}\n[Space] to try again", score.value),
+                    format!("Game Over!\nScore: {}\n[Space] to try again\n[Esc] to quit", score.value),
                     TextStyle {
                         font: asset_server.load("fonts/Roboto-Regular.ttf"),
                         font_size: 80.0,
