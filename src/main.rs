@@ -36,10 +36,10 @@ fn main() {
         // REGION OF DEBUG STARTUP SYSTEMS THAT ARE SETTING UP THE GAME STUFF THAT NEEDS TO HAPPEN IN NOT STARTUP
         .add_startup_system(player::setup_player.system().after("physics").after("graphics_init"))
         .add_startup_system(ai::setup_test_ai_perception.system().after("physics").after("graphics_init"))
+        .add_startup_system(level::setup_environment.system().after("physics"))
         // END
         .run();
 }
-
 
 fn setup(
     mut commands: Commands,

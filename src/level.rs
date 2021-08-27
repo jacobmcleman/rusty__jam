@@ -17,7 +17,6 @@ impl Plugin for LevelPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app
             .add_system(level_builder_system.system())
-            .add_startup_system(setup_environment.system().after("physics"))
         ;
     }
 }
