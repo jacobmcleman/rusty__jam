@@ -2,7 +2,7 @@ use bevy::{
     prelude::*, 
     math::Vec3Swizzles,
     render::pipeline::{RenderPipeline},
-    tasks::{ComputeTaskPool, Task},
+    tasks::{ComputeTaskPool,},
 };
 use bevy_rapier2d::prelude::*;
 use nalgebra::{point, vector};
@@ -41,10 +41,12 @@ impl Facing {
         let change_amt = needed_turn.abs().min(self.turn_rate * turn_rate_mult).copysign(needed_turn);
         self.angle += change_amt;
     }
+
     pub fn turn_towards_direction(&mut self, target_forward: Vec2, turn_rate_mult: f32) {
         self.turn_towards(target_forward.y.atan2(target_forward.x), turn_rate_mult);
     }
-    pub fn turn(&mut self, direction: f32, turn_rate_mult: f32) {
+
+    pub fn _turn(&mut self, direction: f32, turn_rate_mult: f32) {
         let change_amt = direction.signum() * self.turn_rate * turn_rate_mult;
         self.angle += change_amt;
 
@@ -126,7 +128,7 @@ pub fn setup_test_ai_perception(mut commands: Commands,
     spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(50.0, 150.0));
     spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(-50.0, -150.0));
     spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(150.0, -50.0));
-    spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(-150.0, 50.0));
+    //spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(-150.0, 50.0));
 }
 
 fn spawn_enemy(commands: &mut Commands,
@@ -301,7 +303,6 @@ pub fn ai_movement_system(
 }
 
 pub fn ai_chase_behavior_system (
-    time: Res<Time>,
     mut query: Query<(&mut AiMovement, &AiPerception, &mut Facing)>
 ) {
     let mut rng = rand::thread_rng();

@@ -1,6 +1,6 @@
 use bevy::{math::Vec3Swizzles, prelude::*, render::{pipeline::{BlendOperation, PipelineDescriptor}, shader::{ShaderStage, ShaderStages}}};
 use geo::coords_iter::CoordsIter;
-use geo::{Coordinate, Polygon};
+use geo::{Polygon,};
 
 use crate::level;
 use crate::ai::Facing;
@@ -17,7 +17,7 @@ pub struct PointLight {
 }
 
 impl PointLight {
-    pub fn new(color: Color, reach: f32) -> PointLight {
+    pub fn _new(color: Color, reach: f32) -> PointLight {
         PointLight{mesh_built: false, color, reach}
     }
 }
