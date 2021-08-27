@@ -14,6 +14,7 @@ pub struct ContinuousParticleEmitter {
 
 pub struct BurstParticleEmitter {
     pub quantity: i32,
+    pub existence_time: f32,
 }
 
 pub struct ParticleEmissionParams {
@@ -41,13 +42,18 @@ pub fn particle_emission_system(
 
 pub fn burst_particle_emission_system(
     mut commands: Commands,
+    time: Res<Time>,
     mut query: Query<(&mut BurstParticleEmitter, &ParticleEmissionParams, &Transform, Entity)>
 ) {
-    for (emitter, params, transform, entity) in query.iter_mut() {
-        spawn_n_particles(emitter.quantity, &mut commands, transform.translation, params);
-        commands.entity(entity).despawn_recursive();
+    for (mut emitter, params, transform, entity) in query.iter_mut() {
+        if emitter.existence_time == 0.0 {
+            spawn_n_particles(emitter.quantity, &mut commands, transform.translation, params);
+        }
+        emitter.existence_time += time.delta_seconds();
+        if emitter.existence_time > params.lifetime_max {
+            commands.entity(entity).despawn_recursive();
+        }
     } 
-    
 }
 
 pub fn particle_update_system(
@@ -65,8 +71,8 @@ pub fn particle_update_system(
             translation.x += part.velocity.x * time.delta_seconds();
             translation.y += part.velocity.y * time.delta_seconds();
 
-            part.velocity.x *= 1.0 - part.drag;
-            part.velocity.y *= 1.0 - part.drag;
+            part.velocity.x *= 1.0 - part.drag * time.delta_seconds();
+            part.velocity.y *= 1.0 - part.drag * time.delta_seconds();
         }
     }
 }

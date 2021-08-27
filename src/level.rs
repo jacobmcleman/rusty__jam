@@ -94,7 +94,24 @@ impl LevelTiles {
 }
 
 pub struct LevelGeo {
-    blocks: MultiPolygon<f64>
+    level_blocks: Vec<Polygon<f64>>,
+    temp_blocks: Vec<Polygon<f64>>,
+}
+
+impl LevelGeo {
+    pub fn temp_block(&mut self, block: Polygon<f64>) {
+        self.temp_blocks.push(block);
+    }
+
+    pub fn get_geo_multipoly(&self) -> MultiPolygon<f64> {
+        let mut all_blocks = self.temp_blocks.clone();
+        all_blocks.append(&mut self.level_blocks.clone());
+        return MultiPolygon(all_blocks);
+    }
+
+    pub fn reset_temps_for_next_frame(&mut self) {
+        self.temp_blocks.clear();
+    }
 }
 
 pub struct LevelState {
@@ -105,15 +122,15 @@ pub fn setup_environment(
     mut commands: Commands,
 ) {
     commands.spawn()
-        .insert(gen_level_tiles(16, 16))
+        .insert(gen_level_tiles(24, 24))
         .insert(LevelState{built:false})
-        .insert(LevelGeo{blocks: MultiPolygon(vec![])});
+        .insert(LevelGeo{level_blocks: vec![], temp_blocks: vec![]});
 
     //create_static_box(&mut commands, &mut materials, &rapier_config, Vec2::new(200.0, 200.0), Vec2::new(100.0, 100.0));
     //create_static_box(&mut commands, &mut materials, &rapier_config, Vec2::new(-100.0, -100.0), Vec2::new(100.0, 100.0));
 }
 
-fn bevy_vec2_to_geo_coord(bv: Vec2) -> Coordinate<f64> {
+pub fn bevy_vec2_to_geo_coord(bv: Vec2) -> Coordinate<f64> {
     Coordinate{x: bv.x as f64, y: bv.y as f64}
 }
 
@@ -174,15 +191,15 @@ pub fn level_builder_system(
             }
         }
 
-        level_geo.blocks = MultiPolygon(level_polygons);
+        level_geo.level_blocks = level_polygons;
 
         level_state.built = true;
     }
 }
 
-pub fn get_visibility_polygon(level_geo: &LevelGeo, from_point: Vec2) -> Polygon<f64>{
+pub fn get_visibility_polygon(level_geo: &mut LevelGeo, from_point: Vec2) -> Polygon<f64>{
     let point = geo::Point::new(from_point.x as f64, from_point.y as f64);
-    return point.visibility(&level_geo.blocks);
+    return point.visibility(&level_geo.get_geo_multipoly());
 }
 
 fn gen_level_tiles(width: usize, height: usize) -> LevelTiles {
@@ -190,7 +207,7 @@ fn gen_level_tiles(width: usize, height: usize) -> LevelTiles {
     for y in 0..height {
         for x in 0..width {
             tiles.push(
-                if (x * y) % 4 == 1 || x * y == 0 || x == width - 1 || y == height - 1 {TileValue::Wall} 
+                if (((x * y) % 3 == 1) && ((x * y / 3) % 4 == 1)) || x * y == 0 || x == width - 1 || y == height - 1 {TileValue::Wall} 
                 else {TileValue::Empty}
             );
         }

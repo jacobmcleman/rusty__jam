@@ -2,6 +2,7 @@ use bevy::{
     prelude::*, 
     math::Vec3Swizzles,
     render::pipeline::{RenderPipeline},
+    tasks::{ComputeTaskPool,},
 };
 use bevy_rapier2d::prelude::*;
 use nalgebra::{point, vector};
@@ -40,10 +41,12 @@ impl Facing {
         let change_amt = needed_turn.abs().min(self.turn_rate * turn_rate_mult).copysign(needed_turn);
         self.angle += change_amt;
     }
+
     pub fn turn_towards_direction(&mut self, target_forward: Vec2, turn_rate_mult: f32) {
         self.turn_towards(target_forward.y.atan2(target_forward.x), turn_rate_mult);
     }
-    pub fn turn(&mut self, direction: f32, turn_rate_mult: f32) {
+
+    pub fn _turn(&mut self, direction: f32, turn_rate_mult: f32) {
         let change_amt = direction.signum() * self.turn_rate * turn_rate_mult;
         self.angle += change_amt;
 
@@ -62,6 +65,7 @@ pub struct AiPerception {
     can_see_target: bool,
     target_position: Vec2,
     target_direction: f32,
+    last_seen_time: f64,
 }
 
 impl AiPerception {
@@ -72,6 +76,7 @@ impl AiPerception {
             can_see_target: false,
             target_position: Vec2::new(0.0, 0.0),
             target_direction: 0.0,
+            last_seen_time: 0.0,
         }
     }
 }
@@ -122,6 +127,20 @@ pub fn setup_test_ai_perception(mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     render_data: ResMut<lighting::LightRenderData>,
 ) {
+    spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(50.0, 150.0));
+    spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(-50.0, -150.0));
+    spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(150.0, -50.0));
+    //spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(-150.0, 50.0));
+}
+
+fn spawn_enemy(commands: &mut Commands,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    rapier_config: &Res<RapierConfiguration>,
+    asset_server: &Res<AssetServer>,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    render_data: & ResMut<lighting::LightRenderData>,
+    pos: Vec2,
+) {
     // Load sprite
     let circle_texture_handle: Handle<Texture> = asset_server.load("sprites/circle.png");
 
@@ -144,7 +163,7 @@ pub fn setup_test_ai_perception(mut commands: Commands,
         ..Default::default()
     })
     .insert_bundle(ColliderBundle {
-        position: [collider_size_x / 2.0, collider_size_y / 2.0].into(),
+        position: [(pos.x / rapier_config.scale) + collider_size_x / 2.0, (pos.y / rapier_config.scale) + collider_size_y / 2.0].into(),
         ..Default::default()
     })
     .insert(ColliderPositionSync::Discrete)
@@ -153,6 +172,7 @@ pub fn setup_test_ai_perception(mut commands: Commands,
     .insert(AiMovement::new(150.0))
     .insert(AiChaseBehavior{})
     .insert(AiPerceptionDebugIndicator{})
+    .insert(crate::lighting::DynamicLightBlocker{size: 25.0})
     .id();
 
     let mesh = meshes.add(render_data.base_mesh.clone().unwrap());
@@ -161,7 +181,7 @@ pub fn setup_test_ai_perception(mut commands: Commands,
         render_pipelines: RenderPipelines::from_pipelines(vec![RenderPipeline::new(
             render_data.pipeline_handle.clone().unwrap(),
         )]),
-        transform: Transform::from_xyz(0.0, 0.0, 0.1),
+        transform: Transform::from_xyz(0.0, 0.0, rand::thread_rng().gen_range(0.1..0.2)),
         visible: Visible { is_transparent: true, is_visible: true },
         ..Default::default()
     })
@@ -175,10 +195,11 @@ pub fn ai_perception_system (
     query_pipeline: Res<QueryPipeline>,
     collider_query: QueryPipelineColliderComponentsQuery,
     rapier_config: Res<RapierConfiguration>,
+    time: Res<Time>,
     mut query: Query<(Entity, &mut AiPerception, &Transform, &Facing)>,
-    player_query: Query<(&player::PlayerMovement, &Transform)>
+    player_query: Query<(&player::PlayerMovement, &Transform, Entity)>
 ) {
-    let (_player_movement, player_transform) = player_query.single().expect("There should be exactly 1 player");
+    let (_player_movement, player_transform, player_entity) = player_query.single().expect("There should be exactly 1 player");
     let player_position = player_transform.translation;
 
     for (percieve_entity, mut perciever, transform, facing) in query.iter_mut() {
@@ -208,12 +229,13 @@ pub fn ai_perception_system (
                 &collider_set, &ray, max_toi, solid, groups, filter
             ) {
                 let hit_point = ray.point_at(toi);
-                if let Ok((_entity, _coll_pos, coll_shape, _coll_flags)) = collider_query.get(handle.entity()) {
+                if let Ok((hit_entity, _coll_pos, _coll_shape, _coll_flags)) = collider_query.get(handle.entity()) {
                     // Bad way of telling if this is the player for now, since the player is the only ball
-                    if coll_shape.shape_type() == ShapeType::Ball {
+                    if hit_entity == player_entity {
                         perciever.can_see_target = true;
                         perciever.target_position = rapier_config.scale * Vec2::new(hit_point.x, hit_point.y);
                         perciever.target_direction = Vec2::angle_between(Vec2::new(0.0, 0.0), dir_to_player);
+                        perciever.last_seen_time = time.seconds_since_startup();
                         continue;
                     }
                 }
@@ -222,20 +244,25 @@ pub fn ai_perception_system (
 
         // If can see player we continued out of this iteration so if reached here we cannot see
         perciever.can_see_target = false;
+
+        if perciever.last_seen_time == 0.0 {
+            perciever.last_seen_time = time.seconds_since_startup();
+        }
     }
 }
 
 pub fn ai_movement_system(
     rapier_parameters: Res<RapierConfiguration>,
     time: Res<Time>,
+    task_pool: Res<ComputeTaskPool>,
     mut query: Query<(&mut AiMovement, &mut RigidBodyVelocity, &mut Facing, &Transform)>,
     level_query: Query<&level::LevelTiles>,
 ) {
     if let Ok(level) = level_query.single() {
-        for(mut mover, mut rb_vel, mut facing, transform) in query.iter_mut() {
+        query.par_for_each_mut(&task_pool, 1, |(mut mover, mut rb_vel, mut facing, transform)| {
             if !mover.move_to_target { 
                 rb_vel.linvel = vector![0.0, 0.0];
-                continue; 
+                return; 
             }
         
             if mover.current_path.is_empty()                                                    // No path
@@ -252,13 +279,12 @@ pub fn ai_movement_system(
                 else {
                     mover.current_path.clear();
                     mover.move_to_target = false;
-                    continue;
+                    return;
                 }
             }
 
             let vec_to_target =  mover.target_position - transform.translation.xy();
             let distance_to_target = vec_to_target.length();
-            
 
             if distance_to_target < 60.0 {
                 mover.move_to_target = false;
@@ -266,39 +292,42 @@ pub fn ai_movement_system(
             else {
                 // Move along path
                 let next_point = mover.current_path[mover.path_index];
-                if transform.translation.xy().distance(next_point) < 30.0 {
+                if transform.translation.xy().distance(next_point) < 10.0 {
                     mover.path_index += 1;
                 }
 
                 let to_next_point = (next_point - transform.translation.xy()).normalize();
                 //facing.set_forward(to_next_point);
                 facing.turn_towards_direction(to_next_point, time.delta_seconds());
-                let target_factor = to_next_point.normalize().dot(facing.forward()).clamp(0.0, 1.0).powi(2);
+                let target_factor = to_next_point.normalize().dot(facing.forward()).clamp(0.0, 1.0).powi(3);
 
 
                 let movement = facing.forward() * target_factor * (1.0 / rapier_parameters.scale) * mover.move_speed;
                 rb_vel.linvel = vector![movement.x, movement.y];
             }
-        }
+        });
     }
 }
 
 pub fn ai_chase_behavior_system (
     time: Res<Time>,
-    mut query: Query<(&mut AiMovement, &AiPerception, &mut Facing)>
+    mut query: Query<(&mut AiMovement, &AiPerception, &mut Facing)>,
 ) {
     let mut rng = rand::thread_rng();
     for(mut mover, perciever, mut facing) in query.iter_mut() {
         if perciever.can_see_target {
             mover.move_to(perciever.target_position);
-            mover.move_speed = 150.0;
-            facing.turn_rate = std::f32::consts::PI;
+            mover.move_speed = rng.gen_range(200.0..300.0);
+            facing.turn_rate = std::f32::consts::FRAC_PI_2;
             
         } 
         else if !mover.is_moving(){
-            mover.move_to(perciever.target_position + Vec2::new(rng.gen_range(-250.0..250.0), rng.gen_range(-250.0..250.0)));
-            mover.move_speed = 50.0;
-            facing.turn_rate = std::f32::consts::FRAC_PI_2;
+            let time_since_seen = time.seconds_since_startup() - perciever.last_seen_time;
+            let search_rad_t = (time_since_seen / 90.0) as f32;
+            let search_rad = (search_rad_t * 1000.0) + 50.0;
+            mover.move_to(perciever.target_position + Vec2::new(rng.gen_range(-search_rad..search_rad), rng.gen_range(-search_rad..search_rad)));
+            mover.move_speed = rng.gen_range(50.0..120.0);
+            facing.turn_rate = std::f32::consts::FRAC_PI_3;
         }
     }
 }
