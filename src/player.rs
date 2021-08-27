@@ -3,6 +3,8 @@ use bevy_rapier2d::prelude::*;
 use nalgebra::{Vector2, vector};
 
 use crate::particles;
+use crate::gamestate::{GameState, Score};
+use crate::pickup::Pickup;
 
 pub struct PlayerMovement {
     pub speed: f32,
@@ -20,12 +22,13 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut AppBuilder){
-        app
-            .add_system(player_movement_system.system())
-            .add_system(player_shoot_system.system())
-            .add_system(follow_camera_objstep.system())
-            .add_system(follow_camera_camstep.system())
-            ;
+        app.add_system_set(SystemSet::on_update(GameState::Playing)
+            .with_system(player_movement_system.system())
+            .with_system(player_shoot_system.system())
+            .with_system(follow_camera_objstep.system())
+            .with_system(follow_camera_camstep.system())
+            .with_system(process_collision_events.system())
+        );
     }
 }
 
@@ -150,6 +153,7 @@ pub fn spawn_player(
     .insert_bundle(ColliderBundle {
         position: [position.x / rapier_config.scale, position.y / rapier_config.scale].into(),
         shape: ColliderShape::ball(collider_size * 0.5),
+        flags: (ActiveEvents::CONTACT_EVENTS | ActiveEvents::INTERSECTION_EVENTS).into(),
         ..Default::default()
     })
     .insert(ColliderPositionSync::Discrete)
@@ -160,17 +164,49 @@ pub fn spawn_player(
     ;
 }
 
-pub fn setup_player(
+
+fn process_collision_events(
     mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    rapier_config: Res<RapierConfiguration>,
-    asset_server: Res<AssetServer>,
+    mut state: ResMut<State<GameState>>,
+    mut score: ResMut<Score>,
+    mut intersection_events: EventReader<IntersectionEvent>,
+    mut contact_events: EventReader<ContactEvent>,
+    player_query: Query<Entity, With<PlayerMovement>>,
+    enemy_query: Query<Entity, With<crate::ai::AiPerception>>,
+    pickup_query: Query<(Entity, &Pickup), With<Pickup>>,
 ) {
-    spawn_player(
-        Vec2::new(200., 500.),
-        &mut commands,
-        &mut materials,
-        &rapier_config,
-        &asset_server,
-    );
+    for intersection_event in intersection_events.iter() {
+        if player_query.get(intersection_event.collider1.entity()).is_ok() {
+            if let Ok(pair) = pickup_query.get(intersection_event.collider2.entity()) {
+                score.value += pair.1.value;
+                commands.entity(pair.0).despawn_recursive();
+            }
+        }
+        else if player_query.get(intersection_event.collider2.entity()).is_ok() {
+            if let Ok(pair) = pickup_query.get(intersection_event.collider1.entity()) {
+                score.value += pair.1.value;
+                commands.entity(pair.0).despawn_recursive();
+            }
+        }
+    }
+
+    for contact_event in contact_events.iter() {
+        match contact_event {
+            ContactEvent::Started(collider1, collider2) => {
+                let contact1_player = player_query.get(collider1.entity()).is_ok();
+                let contact2_player = player_query.get(collider2.entity()).is_ok();
+                let is_player_involved = contact1_player || contact2_player;
+                let contact1_enemy = enemy_query.get(collider1.entity()).is_ok();
+                let contact2_enemy = enemy_query.get(collider2.entity()).is_ok();
+                let is_enemy_involved = contact1_enemy || contact2_enemy;
+                if is_enemy_involved && is_player_involved {
+                    state.set(GameState::GameOver).unwrap();
+                    return;
+                }
+            }
+            _ => {}
+        }
+        
+        
+    }
 }

@@ -189,7 +189,26 @@ pub fn light_setup_system(
     }
 
     render_data.pipeline_handle = Some(pipelines.add(pipeline));
-    render_data.base_mesh = Some(Mesh::new(bevy::render::pipeline::PrimitiveTopology::TriangleList));
+    let mut mesh = Mesh::new(bevy::render::pipeline::PrimitiveTopology::TriangleList);
+    
+
+    let v_pos = vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [0.0, 10.0, 0.0]];
+    let v_color = vec![[1.0, 0.0, 1.0], [0.0, 1.0, 1.0], [1.0, 1.0, 0.0]];
+    let v_lightpos = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]];
+    let v_lightpower = vec![1.0, 1.0, 1.0];
+    let v_lightfacing = vec![0.0, 0.0, 0.0];
+    let v_lightangle = vec![1.0, 1.0, 1.0];
+    let indices = vec![0, 1, 2];
+
+    mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, v_pos);
+    mesh.set_attribute("light_Color", v_color);
+    mesh.set_attribute("light_Position", v_lightpos);
+    mesh.set_attribute("light_Power", v_lightpower);
+    mesh.set_attribute("light_Facing", v_lightfacing);
+    mesh.set_attribute("light_Angle", v_lightangle);
+    mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
+
+    render_data.base_mesh = Some(mesh);
 }
 
 pub const VERTEX_SHADER: &str = r"

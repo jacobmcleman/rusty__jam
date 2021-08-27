@@ -1,4 +1,9 @@
-use bevy::prelude::*;
+use bevy::{
+    asset::{AssetLoader, LoadContext, LoadedAsset}, 
+    prelude::*,
+    reflect::TypeUuid,
+    utils::BoxedFuture,
+};
 use bevy_rapier2d::prelude::*;
 use geo::{Coordinate, MultiPolygon, Polygon};
 use geo_visibility::Visibility;
@@ -9,6 +14,9 @@ use pathfinding::prelude::{absdiff, astar};
 pub enum TileValue {
     Empty,
     Wall,
+    Pickup,
+    Player,
+    Enemy,
 }
 
 pub struct LevelPlugin;
@@ -17,7 +25,8 @@ impl Plugin for LevelPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app
             .add_system(level_builder_system.system())
-            .add_startup_system(setup_environment.system().after("physics"))
+            .add_asset::<LevelTiles>()
+            .init_asset_loader::<LevelTiles>()
         ;
     }
 }
@@ -33,11 +42,50 @@ impl GridPos {
     }
 }
 
+#[derive(TypeUuid, Default)]
+#[uuid = "47a4a589-01e1-4c15-af08-98b2d0778f28"]
 pub struct LevelTiles {
     width: usize,
     height: usize,
     tile_size: f32,
     tiles: Vec<TileValue>
+}
+
+impl AssetLoader for LevelTiles {
+    fn load<'a>(
+        &'a self,
+        bytes: &'a [u8],
+        load_context: &'a mut LoadContext,
+    ) -> BoxedFuture<'a, Result<(), anyhow::Error>> {
+        Box::pin(async move {
+            let mut tiles = Vec::<TileValue>::new();
+            let mut width = 0;
+            let mut height = 0;
+            let mut index = 0;
+            for byte in bytes {
+                match *byte as char {
+                    ' ' => { tiles.push(TileValue::Empty); index += 1; },
+                    '#' => { tiles.push(TileValue::Wall); index += 1; },
+                    '$' => { tiles.push(TileValue::Pickup); index += 1; },
+                    'V' => { tiles.push(TileValue::Player); index += 1; },
+                    'X' => { tiles.push(TileValue::Enemy); index += 1; },
+                    '\n' => {
+                        if width == 0 { width = index; }
+                        height += 1;
+                    },
+                    _ => ()
+                }
+                
+            }
+
+            load_context.set_default_asset(LoadedAsset::new(LevelTiles{width, height, tile_size: 50.0, tiles}));
+            Ok(())
+        })
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["level"]
+    }
 }
 
 impl LevelTiles {
@@ -131,13 +179,15 @@ pub struct LevelState {
 
 pub fn setup_environment(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
 ) {
-    spawn_level(&mut commands);
+    let level_handle: Handle<LevelTiles> = asset_server.load("levels/test.level");
+    spawn_level(&mut commands, level_handle);
 }
 
-pub fn spawn_level(commands: &mut Commands) {
+pub fn spawn_level(commands: &mut Commands, level: Handle<LevelTiles>) {
     commands.spawn()
-        .insert(gen_level_tiles(24, 24))
+        .insert(level)
         .insert(LevelState{built:false})
         .insert(LevelGeo{level_blocks: vec![], temp_blocks: vec![]});
 }
@@ -179,33 +229,68 @@ fn create_static_box(commands: &mut Commands,
 pub fn level_builder_system(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    levels: Res<Assets<LevelTiles>>,
     rapier_config: Res<RapierConfiguration>,
-    mut level_query: Query<(&mut LevelState, &LevelTiles, &mut LevelGeo)>
+    asset_server: Res<AssetServer>,
+    render_data: ResMut<crate::lighting::LightRenderData>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut level_query: Query<(&mut LevelState, &Handle<LevelTiles>, &mut LevelGeo)>
 ) {
-    if let Ok((mut level_state, level_data, mut level_geo)) = level_query.single_mut() {
+    if let Ok((mut level_state, level_data_handle, mut level_geo)) = level_query.single_mut() {
         if level_state.built { return; }
 
-        let mut level_polygons = Vec::<Polygon<f64>>::new();
+        if let Some(level_data) = levels.get(level_data_handle){
+            let mut level_polygons = Vec::<Polygon<f64>>::new();
 
-        let offset = Vec2::new((level_data.width / 2) as f32 * -level_data.tile_size, (level_data.height / 2) as f32 * -level_data.tile_size);
+            let offset = Vec2::new((level_data.width / 2) as f32 * -level_data.tile_size, (level_data.height / 2) as f32 * -level_data.tile_size);
 
-        for y in 0..level_data.height {
-            for x in 0..level_data.width {
-                if matches!(level_data.tiles[x + (y * level_data.width)], TileValue::Wall) {
-                    create_static_box(
-                        &mut commands, 
-                        &mut materials, 
-                        &rapier_config, 
-                        &mut level_polygons,
-                        offset + Vec2::new(level_data.tile_size * x as f32, level_data.tile_size * y as f32), 
-                        Vec2::new(level_data.tile_size, level_data.tile_size));
+            for y in 0..level_data.height {
+                for x in 0..level_data.width {
+                    let tile_pos = offset + Vec2::new(level_data.tile_size * x as f32, level_data.tile_size * y as f32);
+                    if matches!(level_data.tiles[x + (y * level_data.width)], TileValue::Wall) {
+                        create_static_box(
+                            &mut commands, 
+                            &mut materials, 
+                            &rapier_config, 
+                            &mut level_polygons,
+                            tile_pos, 
+                            Vec2::new(level_data.tile_size, level_data.tile_size));
+                    }
+                    else if matches!(level_data.tiles[x + (y * level_data.width)], TileValue::Pickup) {
+                        crate::pickup::spawn_pickup(tile_pos,
+                            &mut commands,
+                            &mut materials,
+                            rapier_config.scale,
+                            &asset_server,
+                        );
+                    }
+                    else if matches!(level_data.tiles[x + (y * level_data.width)], TileValue::Player) {
+                        crate::player::spawn_player(
+                            tile_pos,
+                            &mut commands,
+                            &mut materials,
+                            &rapier_config,
+                            &asset_server,
+                        );
+                    }
+                    else if matches!(level_data.tiles[x + (y * level_data.width)], TileValue::Enemy) {
+                        crate::ai::spawn_enemy(
+                            &mut commands, 
+                            &mut materials, 
+                            &rapier_config, 
+                            &asset_server, 
+                            &mut meshes, 
+                            &render_data, 
+                            tile_pos
+                        );
+                    }
                 }
             }
+
+            level_geo.level_blocks = level_polygons;
+
+            level_state.built = true;
         }
-
-        level_geo.level_blocks = level_polygons;
-
-        level_state.built = true;
     }
 }
 
@@ -214,7 +299,7 @@ pub fn get_visibility_polygon(level_geo: &mut LevelGeo, from_point: Vec2) -> Pol
     return point.visibility(&level_geo.get_geo_multipoly());
 }
 
-fn gen_level_tiles(width: usize, height: usize) -> LevelTiles {
+fn _gen_level_tiles(width: usize, height: usize) -> LevelTiles {
     let mut tiles = Vec::<TileValue>::new();
     for y in 0..height {
         for x in 0..width {

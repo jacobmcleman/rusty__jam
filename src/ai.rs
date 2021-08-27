@@ -11,17 +11,18 @@ use rand::Rng;
 use crate::player;
 use crate::lighting;
 use crate::level;
+use crate::gamestate::GameState;
 
 pub struct AiPlugin;
 
 impl Plugin for AiPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app
-            .add_system(ai_perception_system.system())
-            .add_system(ai_movement_system.system())
-            .add_system(ai_chase_behavior_system.system())
-            .add_system(ai_perception_debug_system.system())
-        ;
+        app.add_system_set(SystemSet::on_update(GameState::Playing)
+            .with_system(ai_perception_system.system())
+            .with_system(ai_movement_system.system())
+            .with_system(ai_chase_behavior_system.system())
+            .with_system(ai_perception_debug_system.system())
+        );
     }
 }
 
@@ -133,20 +134,7 @@ pub struct AiChaseBehavior;
 
 pub struct AiPerceptionDebugIndicator;
 
-pub fn setup_test_ai_perception(mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    rapier_config: Res<RapierConfiguration>,
-    asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    render_data: ResMut<lighting::LightRenderData>,
-) {
-    spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(50.0, 150.0));
-    spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(-50.0, -150.0));
-    spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(150.0, -50.0));
-    //spawn_enemy(&mut commands, &mut materials, &rapier_config, &asset_server, &mut meshes, &render_data, Vec2::new(-150.0, 50.0));
-}
-
-fn spawn_enemy(commands: &mut Commands,
+pub fn spawn_enemy(commands: &mut Commands,
     materials: &mut ResMut<Assets<ColorMaterial>>,
     rapier_config: &Res<RapierConfiguration>,
     asset_server: &Res<AssetServer>,
@@ -212,54 +200,55 @@ pub fn ai_perception_system (
     mut query: Query<(Entity, &mut AiPerception, &Transform, &Facing)>,
     player_query: Query<(&player::PlayerMovement, &Transform, Entity)>
 ) {
-    let (_player_movement, player_transform, player_entity) = player_query.single().expect("There should be exactly 1 player");
-    let player_position = player_transform.translation;
+    if let Ok((_player_movement, player_transform, player_entity)) = player_query.single() {
+        let player_position = player_transform.translation;
 
-    for (percieve_entity, mut perciever, transform, facing) in query.iter_mut() {
-        let collider_set = QueryPipelineColliderComponentsSet(&collider_query);
+        for (percieve_entity, mut perciever, transform, facing) in query.iter_mut() {
+            let collider_set = QueryPipelineColliderComponentsSet(&collider_query);
 
-        let vec_to_player =  player_position.xy() - transform.translation.xy();
-        let dir_to_player = vec_to_player
-            .try_normalize()
-            .unwrap_or(-facing.forward());
+            let vec_to_player =  player_position.xy() - transform.translation.xy();
+            let dir_to_player = vec_to_player
+                .try_normalize()
+                .unwrap_or(-facing.forward());
 
-        let angle = Vec2::angle_between(facing.forward(), dir_to_player).abs();
+            let angle = Vec2::angle_between(facing.forward(), dir_to_player).abs();
 
-        // Easy escape on cheap math checks
-        if angle <= perciever.vision_cone_angle && vec_to_player.length_squared() <= (perciever.visual_range * perciever.visual_range) {
-            let ray = Ray::new(
-                point![transform.translation.x / rapier_config.scale, transform.translation.y / rapier_config.scale], 
-                vector![dir_to_player.x, dir_to_player.y]);
-            let max_toi = perciever.visual_range / rapier_config.scale;
-            let solid = true;
-            let groups = InteractionGroups::all();
-            let filter_func = |handle: ColliderHandle| {
-                handle.entity() != percieve_entity
-            };
-            let filter: Option<&dyn Fn(ColliderHandle) -> bool> = Some(&filter_func);
+            // Easy escape on cheap math checks
+            if angle <= perciever.vision_cone_angle && vec_to_player.length_squared() <= (perciever.visual_range * perciever.visual_range) {
+                let ray = Ray::new(
+                    point![transform.translation.x / rapier_config.scale, transform.translation.y / rapier_config.scale], 
+                    vector![dir_to_player.x, dir_to_player.y]);
+                let max_toi = perciever.visual_range / rapier_config.scale;
+                let solid = true;
+                let groups = InteractionGroups::all();
+                let filter_func = |handle: ColliderHandle| {
+                    handle.entity() != percieve_entity
+                };
+                let filter: Option<&dyn Fn(ColliderHandle) -> bool> = Some(&filter_func);
 
-            if let Some((handle, toi)) = query_pipeline.cast_ray(
-                &collider_set, &ray, max_toi, solid, groups, filter
-            ) {
-                let hit_point = ray.point_at(toi);
-                if let Ok((hit_entity, _coll_pos, _coll_shape, _coll_flags)) = collider_query.get(handle.entity()) {
-                    // Bad way of telling if this is the player for now, since the player is the only ball
-                    if hit_entity == player_entity {
-                        perciever.can_see_target = true;
-                        perciever.target_position = rapier_config.scale * Vec2::new(hit_point.x, hit_point.y);
-                        perciever.target_direction = Vec2::angle_between(Vec2::new(0.0, 0.0), dir_to_player);
-                        perciever.last_seen_time = time.seconds_since_startup();
-                        continue;
+                if let Some((handle, toi)) = query_pipeline.cast_ray(
+                    &collider_set, &ray, max_toi, solid, groups, filter
+                ) {
+                    let hit_point = ray.point_at(toi);
+                    if let Ok((hit_entity, _coll_pos, _coll_shape, _coll_flags)) = collider_query.get(handle.entity()) {
+                        // Bad way of telling if this is the player for now, since the player is the only ball
+                        if hit_entity == player_entity {
+                            perciever.can_see_target = true;
+                            perciever.target_position = rapier_config.scale * Vec2::new(hit_point.x, hit_point.y);
+                            perciever.target_direction = Vec2::angle_between(Vec2::new(0.0, 0.0), dir_to_player);
+                            perciever.last_seen_time = time.seconds_since_startup();
+                            continue;
+                        }
                     }
                 }
             }
-        }
 
-        // If can see player we continued out of this iteration so if reached here we cannot see
-        perciever.can_see_target = false;
+            // If can see player we continued out of this iteration so if reached here we cannot see
+            perciever.can_see_target = false;
 
-        if perciever.last_seen_time == 0.0 {
-            perciever.last_seen_time = time.seconds_since_startup();
+            if perciever.last_seen_time == 0.0 {
+                perciever.last_seen_time = time.seconds_since_startup();
+            }
         }
     }
 }
@@ -268,57 +257,61 @@ pub fn ai_movement_system(
     rapier_parameters: Res<RapierConfiguration>,
     time: Res<Time>,
     task_pool: Res<ComputeTaskPool>,
+    levels: Res<Assets<level::LevelTiles>>,
     mut query: Query<(&mut AiMovement, &mut RigidBodyVelocity, &mut Facing, &Transform)>,
-    level_query: Query<&level::LevelTiles>,
+    level_query: Query<&Handle<level::LevelTiles>,>,
 ) {
-    if let Ok(level) = level_query.single() {
-        query.par_for_each_mut(&task_pool, 1, |(mut mover, mut rb_vel, mut facing, transform)| {
-            if !mover.move_to_target { 
-                rb_vel.linvel = vector![0.0, 0.0];
-                return; 
-            }
-        
-            if mover.current_path.is_empty()                                                    // No path
-                || mover.path_index >= mover.current_path.len()                                 // Run out of path but still thinks need to move
-                || mover.current_path.last().unwrap().distance(mover.target_position) > 60.0    // Last point in path is stale 
-                // Safe to unwrap last since previous check covers the empty case
-            { 
-                mover.path_index = 0;
-                // path is stale or non-existent, need to request a new one
-                if let Some(path) = level.get_path(transform.translation.xy(), mover.target_position) {
-                    mover.current_path = path;
-                    
+    
+    if let Ok(level_handle) = level_query.single() {
+        if let Some(level) = levels.get(level_handle){
+            query.par_for_each_mut(&task_pool, 1, |(mut mover, mut rb_vel, mut facing, transform)| {
+                if !mover.move_to_target { 
+                    rb_vel.linvel = vector![0.0, 0.0];
+                    return; 
+                }
+            
+                if mover.current_path.is_empty()                                                    // No path
+                    || mover.path_index >= mover.current_path.len()                                 // Run out of path but still thinks need to move
+                    || mover.current_path.last().unwrap().distance(mover.target_position) > 60.0    // Last point in path is stale 
+                    // Safe to unwrap last since previous check covers the empty case
+                { 
+                    mover.path_index = 0;
+                    // path is stale or non-existent, need to request a new one
+                    if let Some(path) = level.get_path(transform.translation.xy(), mover.target_position) {
+                        mover.current_path = path;
+                        
+                    }
+                    else {
+                        mover.current_path.clear();
+                        mover.move_to_target = false;
+                        return;
+                    }
+                }
+    
+                let vec_to_target =  mover.target_position - transform.translation.xy();
+                let distance_to_target = vec_to_target.length();
+    
+                if distance_to_target < 60.0 {
+                    mover.move_to_target = false;
                 }
                 else {
-                    mover.current_path.clear();
-                    mover.move_to_target = false;
-                    return;
+                    // Move along path
+                    let next_point = mover.current_path[mover.path_index];
+                    if transform.translation.xy().distance(next_point) < 10.0 {
+                        mover.path_index += 1;
+                    }
+    
+                    let to_next_point = (next_point - transform.translation.xy()).normalize();
+                    //facing.set_forward(to_next_point);
+                    facing.turn_towards_direction(to_next_point, time.delta_seconds());
+                    let target_factor = to_next_point.normalize().dot(facing.forward()).clamp(0.0, 1.0).powi(3);
+    
+    
+                    let movement = facing.forward() * target_factor * (1.0 / rapier_parameters.scale) * mover.move_speed;
+                    rb_vel.linvel = vector![movement.x, movement.y];
                 }
-            }
-
-            let vec_to_target =  mover.target_position - transform.translation.xy();
-            let distance_to_target = vec_to_target.length();
-
-            if distance_to_target < 60.0 {
-                mover.move_to_target = false;
-            }
-            else {
-                // Move along path
-                let next_point = mover.current_path[mover.path_index];
-                if transform.translation.xy().distance(next_point) < 10.0 {
-                    mover.path_index += 1;
-                }
-
-                let to_next_point = (next_point - transform.translation.xy()).normalize();
-                //facing.set_forward(to_next_point);
-                facing.turn_towards_direction(to_next_point, time.delta_seconds());
-                let target_factor = to_next_point.normalize().dot(facing.forward()).clamp(0.0, 1.0).powi(3);
-
-
-                let movement = facing.forward() * target_factor * (1.0 / rapier_parameters.scale) * mover.move_speed;
-                rb_vel.linvel = vector![movement.x, movement.y];
-            }
-        });
+            });
+        }
     }
 }
 
