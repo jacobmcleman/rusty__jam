@@ -11,17 +11,18 @@ use rand::Rng;
 use crate::player;
 use crate::lighting;
 use crate::level;
+use crate::gamestate::GameState;
 
 pub struct AiPlugin;
 
 impl Plugin for AiPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app
-            .add_system(ai_perception_system.system())
-            .add_system(ai_movement_system.system())
-            .add_system(ai_chase_behavior_system.system())
-            .add_system(ai_perception_debug_system.system())
-        ;
+        app.add_system_set(SystemSet::on_update(GameState::Playing)
+            .with_system(ai_perception_system.system())
+            .with_system(ai_movement_system.system())
+            .with_system(ai_chase_behavior_system.system())
+            .with_system(ai_perception_debug_system.system())
+        );
     }
 }
 
@@ -212,54 +213,55 @@ pub fn ai_perception_system (
     mut query: Query<(Entity, &mut AiPerception, &Transform, &Facing)>,
     player_query: Query<(&player::PlayerMovement, &Transform, Entity)>
 ) {
-    let (_player_movement, player_transform, player_entity) = player_query.single().expect("There should be exactly 1 player");
-    let player_position = player_transform.translation;
+    if let Ok((_player_movement, player_transform, player_entity)) = player_query.single() {
+        let player_position = player_transform.translation;
 
-    for (percieve_entity, mut perciever, transform, facing) in query.iter_mut() {
-        let collider_set = QueryPipelineColliderComponentsSet(&collider_query);
+        for (percieve_entity, mut perciever, transform, facing) in query.iter_mut() {
+            let collider_set = QueryPipelineColliderComponentsSet(&collider_query);
 
-        let vec_to_player =  player_position.xy() - transform.translation.xy();
-        let dir_to_player = vec_to_player
-            .try_normalize()
-            .unwrap_or(-facing.forward());
+            let vec_to_player =  player_position.xy() - transform.translation.xy();
+            let dir_to_player = vec_to_player
+                .try_normalize()
+                .unwrap_or(-facing.forward());
 
-        let angle = Vec2::angle_between(facing.forward(), dir_to_player).abs();
+            let angle = Vec2::angle_between(facing.forward(), dir_to_player).abs();
 
-        // Easy escape on cheap math checks
-        if angle <= perciever.vision_cone_angle && vec_to_player.length_squared() <= (perciever.visual_range * perciever.visual_range) {
-            let ray = Ray::new(
-                point![transform.translation.x / rapier_config.scale, transform.translation.y / rapier_config.scale], 
-                vector![dir_to_player.x, dir_to_player.y]);
-            let max_toi = perciever.visual_range / rapier_config.scale;
-            let solid = true;
-            let groups = InteractionGroups::all();
-            let filter_func = |handle: ColliderHandle| {
-                handle.entity() != percieve_entity
-            };
-            let filter: Option<&dyn Fn(ColliderHandle) -> bool> = Some(&filter_func);
+            // Easy escape on cheap math checks
+            if angle <= perciever.vision_cone_angle && vec_to_player.length_squared() <= (perciever.visual_range * perciever.visual_range) {
+                let ray = Ray::new(
+                    point![transform.translation.x / rapier_config.scale, transform.translation.y / rapier_config.scale], 
+                    vector![dir_to_player.x, dir_to_player.y]);
+                let max_toi = perciever.visual_range / rapier_config.scale;
+                let solid = true;
+                let groups = InteractionGroups::all();
+                let filter_func = |handle: ColliderHandle| {
+                    handle.entity() != percieve_entity
+                };
+                let filter: Option<&dyn Fn(ColliderHandle) -> bool> = Some(&filter_func);
 
-            if let Some((handle, toi)) = query_pipeline.cast_ray(
-                &collider_set, &ray, max_toi, solid, groups, filter
-            ) {
-                let hit_point = ray.point_at(toi);
-                if let Ok((hit_entity, _coll_pos, _coll_shape, _coll_flags)) = collider_query.get(handle.entity()) {
-                    // Bad way of telling if this is the player for now, since the player is the only ball
-                    if hit_entity == player_entity {
-                        perciever.can_see_target = true;
-                        perciever.target_position = rapier_config.scale * Vec2::new(hit_point.x, hit_point.y);
-                        perciever.target_direction = Vec2::angle_between(Vec2::new(0.0, 0.0), dir_to_player);
-                        perciever.last_seen_time = time.seconds_since_startup();
-                        continue;
+                if let Some((handle, toi)) = query_pipeline.cast_ray(
+                    &collider_set, &ray, max_toi, solid, groups, filter
+                ) {
+                    let hit_point = ray.point_at(toi);
+                    if let Ok((hit_entity, _coll_pos, _coll_shape, _coll_flags)) = collider_query.get(handle.entity()) {
+                        // Bad way of telling if this is the player for now, since the player is the only ball
+                        if hit_entity == player_entity {
+                            perciever.can_see_target = true;
+                            perciever.target_position = rapier_config.scale * Vec2::new(hit_point.x, hit_point.y);
+                            perciever.target_direction = Vec2::angle_between(Vec2::new(0.0, 0.0), dir_to_player);
+                            perciever.last_seen_time = time.seconds_since_startup();
+                            continue;
+                        }
                     }
                 }
             }
-        }
 
-        // If can see player we continued out of this iteration so if reached here we cannot see
-        perciever.can_see_target = false;
+            // If can see player we continued out of this iteration so if reached here we cannot see
+            perciever.can_see_target = false;
 
-        if perciever.last_seen_time == 0.0 {
-            perciever.last_seen_time = time.seconds_since_startup();
+            if perciever.last_seen_time == 0.0 {
+                perciever.last_seen_time = time.seconds_since_startup();
+            }
         }
     }
 }
