@@ -24,34 +24,19 @@ fn main() {
             mode: WindowMode::Windowed,
             ..Default::default()
         })
-        .insert_resource(lighting::LightRenderData {
-            pipeline_handle: None,
-            base_mesh: None
-        })
+        .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
-        .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
+        .add_plugin(player::PlayerPlugin)
+        .add_plugin(level::LevelPlugin)
+        .add_plugin(ai::AiPlugin)
+        .add_plugin(lighting::LightingPlugin)
+        .add_plugin(particles::ParticlePlugin)
         .add_startup_system(setup.system().label("physics"))
+        // REGION OF DEBUG STARTUP SYSTEMS THAT ARE SETTING UP THE GAME STUFF THAT NEEDS TO HAPPEN IN NOT STARTUP
         .add_startup_system(player::setup_player.system().after("physics").after("graphics_init"))
-        .add_startup_system(level::setup_environment.system().after("physics"))
         .add_startup_system(ai::setup_test_ai_perception.system().after("physics").after("graphics_init"))
-        .add_system(player::player_movement_system.system())
-        .add_system(player::player_shoot_system.system())
-        .add_system(level::level_builder_system.system())
-        .add_system(particles::particle_emission_system.system())
-        .add_system(particles::burst_particle_emission_system.system())
-        .add_system(particles::particle_update_system.system())
-        .add_system(ai::ai_perception_system.system())
-        .add_system(ai::ai_movement_system.system())
-        .add_system(ai::ai_chase_behavior_system.system())
-        .add_system(ai::ai_perception_debug_system.system())
-        .add_startup_system(lighting::light_setup_system.system().label("graphics_init"))
-        .add_system(lighting::point_light_mesh_builder.system().after("light_setup"))
-        .add_system(lighting::spotlight_mesh_builder.system().after("light_setup"))
-        .add_system(lighting::test_spin_system.system())
-        .add_system(lighting::dynamic_light_blocking_system.system().label("light_setup"))
-        .add_system(player::follow_camera_objstep.system())
-        .add_system(player::follow_camera_camstep.system())
+        // END
         .run();
 }
 

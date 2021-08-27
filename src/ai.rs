@@ -12,6 +12,19 @@ use crate::player;
 use crate::lighting;
 use crate::level;
 
+pub struct AiPlugin;
+
+impl Plugin for AiPlugin {
+    fn build(&self, app: &mut AppBuilder) {
+        app
+            .add_system(ai_perception_system.system())
+            .add_system(ai_movement_system.system())
+            .add_system(ai_chase_behavior_system.system())
+            .add_system(ai_perception_debug_system.system())
+        ;
+    }
+}
+
 pub struct Facing {
     pub angle: f32,
     pub turn_rate: f32

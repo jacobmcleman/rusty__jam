@@ -11,6 +11,17 @@ pub enum TileValue {
     Wall,
 }
 
+pub struct LevelPlugin;
+
+impl Plugin for LevelPlugin {
+    fn build(&self, app: &mut AppBuilder) {
+        app
+            .add_system(level_builder_system.system())
+            .add_startup_system(setup_environment.system().after("physics"))
+        ;
+    }
+}
+
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct GridPos {
     pub x: i32, pub y: i32
@@ -121,13 +132,14 @@ pub struct LevelState {
 pub fn setup_environment(
     mut commands: Commands,
 ) {
+    spawn_level(&mut commands);
+}
+
+pub fn spawn_level(commands: &mut Commands) {
     commands.spawn()
         .insert(gen_level_tiles(24, 24))
         .insert(LevelState{built:false})
         .insert(LevelGeo{level_blocks: vec![], temp_blocks: vec![]});
-
-    //create_static_box(&mut commands, &mut materials, &rapier_config, Vec2::new(200.0, 200.0), Vec2::new(100.0, 100.0));
-    //create_static_box(&mut commands, &mut materials, &rapier_config, Vec2::new(-100.0, -100.0), Vec2::new(100.0, 100.0));
 }
 
 pub fn bevy_vec2_to_geo_coord(bv: Vec2) -> Coordinate<f64> {

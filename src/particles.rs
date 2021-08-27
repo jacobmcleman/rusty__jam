@@ -27,6 +27,18 @@ pub struct ParticleEmissionParams {
     pub material: Handle<ColorMaterial>
 }
 
+pub struct ParticlePlugin;
+
+impl Plugin for ParticlePlugin {
+    fn build(&self, app: &mut AppBuilder) {
+        app
+            .add_system(particle_emission_system.system())
+            .add_system(burst_particle_emission_system.system())
+            .add_system(particle_update_system.system())
+        ;
+    }
+}
+
 pub fn particle_emission_system(
     mut commands: Commands,
     time: Res<Time>,

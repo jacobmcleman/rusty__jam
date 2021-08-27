@@ -16,6 +16,19 @@ pub struct CamFollow {
     pub position: Vec2,
 }
 
+pub struct PlayerPlugin;
+
+impl Plugin for PlayerPlugin {
+    fn build(&self, app: &mut AppBuilder){
+        app
+            .add_system(player_movement_system.system())
+            .add_system(player_shoot_system.system())
+            .add_system(follow_camera_objstep.system())
+            .add_system(follow_camera_camstep.system())
+            ;
+    }
+}
+
 pub fn player_movement_system(
     keyboard_input: Res<Input<KeyCode>>,
     rapier_parameters: Res<RapierConfiguration>,
@@ -69,10 +82,10 @@ pub fn player_shoot_system(
                 .insert(particles::ParticleEmissionParams {
                     speed_min: 20.0,
                     speed_max: 250.0,
-                    particle_drag: 2.0,
+                    particle_drag: 4.0,
                     particle_size: Vec2::new(20.0, 20.0),
-                    lifetime_min: 3.0,
-                    lifetime_max: 10.0,
+                    lifetime_min: 8.0,
+                    lifetime_max: 15.0,
                     material: player.smoke_mat.clone(),
                 })
                 .insert(Transform::from_translation(transform.translation))
@@ -108,11 +121,12 @@ pub fn follow_camera_objstep(
     }
 }
 
-pub fn setup_player(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    rapier_config: Res<RapierConfiguration>,
-    asset_server: Res<AssetServer>,
+pub fn spawn_player(
+    position: Vec2,
+    commands: &mut Commands,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    rapier_config: &Res<RapierConfiguration>,
+    asset_server: &Res<AssetServer>,
 ) {
     // Load sprite
     let circle_texture_handle: Handle<Texture> = asset_server.load("sprites/circle.png");
@@ -120,8 +134,7 @@ pub fn setup_player(
     let sprite_size_x = 40.0;
     let sprite_size_y = 40.0;
 
-    let collider_size_x = sprite_size_x / rapier_config.scale;
-    let collider_size_y = sprite_size_y / rapier_config.scale;
+    let collider_size = sprite_size_x / rapier_config.scale;
 
     commands
     .spawn()
@@ -135,8 +148,8 @@ pub fn setup_player(
         ..Default::default()
     })
     .insert_bundle(ColliderBundle {
-        position: [collider_size_x / 2.0, collider_size_y / 2.0].into(),
-        shape: ColliderShape::ball(collider_size_x * 0.5),
+        position: [position.x / rapier_config.scale, position.y / rapier_config.scale].into(),
+        shape: ColliderShape::ball(collider_size * 0.5),
         ..Default::default()
     })
     .insert(ColliderPositionSync::Discrete)
@@ -145,4 +158,19 @@ pub fn setup_player(
     .insert(crate::lighting::DynamicLightBlocker{size: 20.0})
     .insert( CamFollow{position: Vec2::default()})
     ;
+}
+
+pub fn setup_player(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    rapier_config: Res<RapierConfiguration>,
+    asset_server: Res<AssetServer>,
+) {
+    spawn_player(
+        Vec2::new(200., 500.),
+        &mut commands,
+        &mut materials,
+        &rapier_config,
+        &asset_server,
+    );
 }

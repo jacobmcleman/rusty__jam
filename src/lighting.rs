@@ -5,6 +5,24 @@ use geo::{Polygon,};
 use crate::level;
 use crate::ai::Facing;
 
+pub struct LightingPlugin;
+
+impl Plugin for LightingPlugin {
+    fn build(&self, app: &mut AppBuilder) {
+        app
+            .insert_resource(LightRenderData {
+                pipeline_handle: None,
+                base_mesh: None
+            })
+            .add_startup_system(light_setup_system.system().label("graphics_init"))
+            .add_system(point_light_mesh_builder.system().after("light_setup"))
+            .add_system(spotlight_mesh_builder.system().after("light_setup"))
+            .add_system(test_spin_system.system())
+            .add_system(dynamic_light_blocking_system.system().label("light_setup"))
+        ;
+    }
+}
+
 pub struct LightRenderData {
     pub pipeline_handle: Option<Handle<PipelineDescriptor>>,
     pub base_mesh: Option<Mesh>
