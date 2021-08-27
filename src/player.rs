@@ -55,7 +55,7 @@ pub fn player_shoot_system(
         if keyboard_input.just_pressed(KeyCode::Space) {
             println!("player position: {}", transform.translation);
 
-            let block_size = 50.0;
+            let block_size = 100.0;
 
             commands.spawn()
                 .insert(particles::BurstParticleEmitter {
@@ -63,9 +63,9 @@ pub fn player_shoot_system(
                     existence_time: 0.0,
                 })
                 .insert(particles::ParticleEmissionParams {
-                    speed_min: 10.0,
-                    speed_max: 100.0,
-                    particle_drag: 0.01,
+                    speed_min: 20.0,
+                    speed_max: 250.0,
+                    particle_drag: 2.0,
                     particle_size: Vec2::new(20.0, 20.0),
                     lifetime_min: 3.0,
                     lifetime_max: 10.0,

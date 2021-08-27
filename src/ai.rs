@@ -65,6 +65,7 @@ pub struct AiPerception {
     can_see_target: bool,
     target_position: Vec2,
     target_direction: f32,
+    last_seen_time: f64,
 }
 
 impl AiPerception {
@@ -75,6 +76,7 @@ impl AiPerception {
             can_see_target: false,
             target_position: Vec2::new(0.0, 0.0),
             target_direction: 0.0,
+            last_seen_time: 0.0,
         }
     }
 }
@@ -193,6 +195,7 @@ pub fn ai_perception_system (
     query_pipeline: Res<QueryPipeline>,
     collider_query: QueryPipelineColliderComponentsQuery,
     rapier_config: Res<RapierConfiguration>,
+    time: Res<Time>,
     mut query: Query<(Entity, &mut AiPerception, &Transform, &Facing)>,
     player_query: Query<(&player::PlayerMovement, &Transform, Entity)>
 ) {
@@ -232,6 +235,7 @@ pub fn ai_perception_system (
                         perciever.can_see_target = true;
                         perciever.target_position = rapier_config.scale * Vec2::new(hit_point.x, hit_point.y);
                         perciever.target_direction = Vec2::angle_between(Vec2::new(0.0, 0.0), dir_to_player);
+                        perciever.last_seen_time = time.seconds_since_startup();
                         continue;
                     }
                 }
@@ -240,6 +244,10 @@ pub fn ai_perception_system (
 
         // If can see player we continued out of this iteration so if reached here we cannot see
         perciever.can_see_target = false;
+
+        if perciever.last_seen_time == 0.0 {
+            perciever.last_seen_time = time.seconds_since_startup();
+        }
     }
 }
 
@@ -277,7 +285,6 @@ pub fn ai_movement_system(
 
             let vec_to_target =  mover.target_position - transform.translation.xy();
             let distance_to_target = vec_to_target.length();
-            
 
             if distance_to_target < 60.0 {
                 mover.move_to_target = false;
@@ -303,19 +310,23 @@ pub fn ai_movement_system(
 }
 
 pub fn ai_chase_behavior_system (
-    mut query: Query<(&mut AiMovement, &AiPerception, &mut Facing)>
+    time: Res<Time>,
+    mut query: Query<(&mut AiMovement, &AiPerception, &mut Facing)>,
 ) {
     let mut rng = rand::thread_rng();
     for(mut mover, perciever, mut facing) in query.iter_mut() {
         if perciever.can_see_target {
             mover.move_to(perciever.target_position);
-            mover.move_speed = 150.0;
+            mover.move_speed = rng.gen_range(200.0..300.0);
             facing.turn_rate = std::f32::consts::FRAC_PI_2;
             
         } 
         else if !mover.is_moving(){
-            mover.move_to(perciever.target_position + Vec2::new(rng.gen_range(-250.0..250.0), rng.gen_range(-250.0..250.0)));
-            mover.move_speed = 50.0;
+            let time_since_seen = time.seconds_since_startup() - perciever.last_seen_time;
+            let search_rad_t = (time_since_seen / 90.0) as f32;
+            let search_rad = (search_rad_t * 1000.0) + 50.0;
+            mover.move_to(perciever.target_position + Vec2::new(rng.gen_range(-search_rad..search_rad), rng.gen_range(-search_rad..search_rad)));
+            mover.move_speed = rng.gen_range(50.0..120.0);
             facing.turn_rate = std::f32::consts::FRAC_PI_3;
         }
     }

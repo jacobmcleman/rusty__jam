@@ -71,8 +71,8 @@ pub fn particle_update_system(
             translation.x += part.velocity.x * time.delta_seconds();
             translation.y += part.velocity.y * time.delta_seconds();
 
-            part.velocity.x *= 1.0 - part.drag;
-            part.velocity.y *= 1.0 - part.drag;
+            part.velocity.x *= 1.0 - part.drag * time.delta_seconds();
+            part.velocity.y *= 1.0 - part.drag * time.delta_seconds();
         }
     }
 }
