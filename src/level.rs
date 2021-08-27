@@ -312,7 +312,7 @@ pub fn level_builder_system(
     }
 }
 
-pub fn get_visibility_polygon(level_geo: &mut LevelGeo, from_point: Vec2) -> Polygon<f64>{
+pub fn get_visibility_polygon(level_geo: &LevelGeo, from_point: Vec2) -> Polygon<f64>{
     let point = geo::Point::new(from_point.x as f64, from_point.y as f64);
     return point.visibility(&level_geo.get_geo_multipoly());
 }

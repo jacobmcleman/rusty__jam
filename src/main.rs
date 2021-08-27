@@ -1,4 +1,9 @@
-use bevy::{prelude::*, render::camera::Camera, window::WindowMode};
+use bevy::{
+    prelude::*, 
+    render::camera::Camera, 
+    window::WindowMode,
+    diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
+};
 use bevy_rapier2d::prelude::*;
 use nalgebra::Vector2;
 
@@ -27,7 +32,8 @@ fn main() {
         })
         .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
         .insert_resource(gamestate::Score{value: 0})
-        .insert_resource(gamestate::CurrentLevel{name: "test copy".to_string()})
+        .insert_resource(gamestate::CurrentLevel{name: "game".to_string()})
+        .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugins(DefaultPlugins)
         .add_state(GameState::Startup)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
@@ -55,6 +61,7 @@ fn main() {
         .add_system_set(
             SystemSet::on_update(GameState::GameOver).with_system(gamestate::startgame_keyboard.system()),
         )
+        .add_system(screen_text.system())
         // END
         .run();
 }
@@ -89,6 +96,25 @@ fn startup_setup(
                 ..Default::default()
             });
         });
+
+        
+}
+
+struct DiagText;
+struct Preserve;
+fn screen_text(
+    diagnostics: Res<Diagnostics>,
+    score: Res<Score>,
+    mut query: Query<&mut Text, With<DiagText>>,
+) {
+    if let Some(fps) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
+        if let Some(average) = fps.average() {
+            for mut text in query.iter_mut() {
+                text.sections[1].value = format!("{}", score.value);
+                text.sections[3].value = format!("{:.2}", average);
+            }
+        }
+    };
 }
 
 
@@ -130,18 +156,73 @@ fn gameover_setup(
 fn all_setup(
     mut commands: Commands,
     mut rapier_config: ResMut<RapierConfiguration>,
+    asset_server: Res<AssetServer>,
 ) {
     // Spawn cameras
     commands.spawn_bundle(OrthographicCameraBundle::new_2d())
-        .insert(MainCam );
-    commands.spawn_bundle(UiCameraBundle::default());
+        .insert(MainCam )
+        .insert(Preserve);
+    commands.spawn_bundle(UiCameraBundle::default())
+        .insert(Preserve);
 
     // Configure Physics
     rapier_config.scale = 40.0;
     rapier_config.gravity = Vector2::zeros();
+
+    commands.spawn_bundle(TextBundle {
+        text: Text {
+            sections: vec![
+                TextSection {
+                    value: "Collected Count: ".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                        font_size: 40.0,
+                        color: Color::rgb(0.0, 1.0, 0.0),
+                    },
+                },
+                TextSection {
+                    value: "".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                        font_size: 40.0,
+                        color: Color::rgb(0.0, 1.0, 1.0),
+                    },
+                },
+                TextSection {
+                    value: "\nAverage FPS: ".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                        font_size: 40.0,
+                        color: Color::rgb(0.0, 1.0, 0.0),
+                    },
+                },
+                TextSection {
+                    value: "".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                        font_size: 40.0,
+                        color: Color::rgb(0.0, 1.0, 1.0),
+                    },
+                },
+            ],
+            ..Default::default()
+        },
+        style: Style {
+            position_type: PositionType::Absolute,
+            position: Rect {
+                top: Val::Px(5.0),
+                left: Val::Px(5.0),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .insert(DiagText)
+    .insert(Preserve);
 }
 
-fn teardown(mut commands: Commands, entities: Query<Entity, Without<Camera>>) {
+fn teardown(mut commands: Commands, entities: Query<Entity, Without<Preserve>>) {
     for entity in entities.iter() {
         commands.entity(entity).despawn_recursive();
     }

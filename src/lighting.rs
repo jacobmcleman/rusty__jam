@@ -1,8 +1,8 @@
-use bevy::{math::Vec3Swizzles, prelude::*, render::{pipeline::{BlendOperation, PipelineDescriptor}, shader::{ShaderStage, ShaderStages}}};
+use bevy::{math::Vec3Swizzles, prelude::*, render::{camera::OrthographicProjection, pipeline::{BlendOperation, PipelineDescriptor}, shader::{ShaderStage, ShaderStages}}, tasks::ComputeTaskPool};
 use geo::coords_iter::CoordsIter;
 use geo::{Polygon,};
 
-use crate::level;
+use crate::{MainCam, level};
 use crate::ai::Facing;
 
 pub struct LightingPlugin;
@@ -15,10 +15,11 @@ impl Plugin for LightingPlugin {
                 base_mesh: None
             })
             .add_startup_system(light_setup_system.system().label("graphics_init"))
-            .add_system(point_light_mesh_builder.system().after("light_setup"))
+            .add_system(point_light_mesh_builder.system().label("light_build").after("light_setup"))
             .add_system(spotlight_mesh_builder.system().after("light_setup"))
             .add_system(test_spin_system.system())
             .add_system(dynamic_light_blocking_system.system().label("light_setup"))
+            .add_system(light_mesh_applicator.system().after("light_build"))
         ;
     }
 }
@@ -45,6 +46,18 @@ pub struct SpotLight {
     pub color: Color,
     pub angle: f32,
     pub reach: f32
+}
+
+
+#[derive(Default)]
+pub struct LightMeshData {
+    v_pos: Vec<[f32; 3]>,
+    v_color: Vec<[f32; 3]>,
+    v_lightpos: Vec<[f32; 3]>,
+    v_lightpower: Vec<f32>,
+    v_lightfacing: Vec<f32>,
+    v_lightangle: Vec<f32>,
+    indices: Vec<u32>,
 }
 
 impl SpotLight {
@@ -80,11 +93,11 @@ pub fn dynamic_light_blocking_system(
     }
 }
 
-fn build_mesh_for_vis_poly(poly: &geo::Polygon<f64>, mesh: &mut Mesh, center: Vec2, z: f32, color: Color, reach: f32) {
+fn build_mesh_for_vis_poly(poly: &geo::Polygon<f64>, mesh: &mut LightMeshData, center: Vec2, z: f32, color: Color, reach: f32) {
     build_mesh_for_vis_poly_cone(poly, mesh, center, z, color, reach, 0.0, 4.0);
 }
 
-fn build_mesh_for_vis_poly_cone(poly: &geo::Polygon<f64>, mesh: &mut Mesh, center: Vec2, z: f32, color: Color, reach: f32, facing: f32, angle: f32) {
+fn build_mesh_for_vis_poly_cone(poly: &geo::Polygon<f64>, mesh: &mut LightMeshData, center: Vec2, z: f32, color: Color, reach: f32, facing: f32, angle: f32) {
     let mut v_pos = vec![[center.x, center.y, z]];
     let mut v_color = vec![[color.r(), color.g(), color.b()]];
     let mut v_lightpos = vec![[center.x, center.y, z]];
@@ -115,52 +128,81 @@ fn build_mesh_for_vis_poly_cone(poly: &geo::Polygon<f64>, mesh: &mut Mesh, cente
         point_index += 1;
     }
 
-    mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, v_pos);
-    mesh.set_attribute("light_Color", v_color);
-    mesh.set_attribute("light_Position", v_lightpos);
-    mesh.set_attribute("light_Power", v_lightpower);
-    mesh.set_attribute("light_Facing", v_lightfacing);
-    mesh.set_attribute("light_Angle", v_lightangle);
-    mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
+    mesh.v_pos = v_pos;
+    mesh.v_color = v_color;
+    mesh.v_lightpos = v_lightpos;
+    mesh.v_lightpower = v_lightpower;
+    mesh.v_lightfacing = v_lightfacing;
+    mesh.v_lightangle = v_lightangle;
+    mesh.indices = indices;
+}
+
+pub fn light_mesh_applicator(
+    mut query: Query<(&LightMeshData, &Handle<Mesh>)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    for (mesh_data, mesh_handle) in query.iter_mut() {
+        if let Some(mesh) = meshes.get_mut(mesh_handle.id) {
+            mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, mesh_data.v_pos.clone());
+            mesh.set_attribute("light_Color", mesh_data.v_color.clone());
+            mesh.set_attribute("light_Position", mesh_data.v_lightpos.clone());
+            mesh.set_attribute("light_Power", mesh_data.v_lightpower.clone());
+            mesh.set_attribute("light_Facing", mesh_data.v_lightfacing.clone());
+            mesh.set_attribute("light_Angle", mesh_data.v_lightangle.clone());
+            mesh.set_indices(Some(bevy::render::mesh::Indices::U32(mesh_data.indices.clone())));
+        }
+    }
 }
 
 pub fn point_light_mesh_builder(
-    mut query: Query<(&mut PointLight, &GlobalTransform, &mut Handle<Mesh>)>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    mut query: Query<(&mut PointLight, &GlobalTransform, &mut LightMeshData)>,
     mut level_query: Query<&mut level::LevelGeo>
 ) {
     if let Ok(mut level_geo) = level_query.single_mut() {
-        for (mut light, transform, mesh_handle) in query.iter_mut() {
+        for (mut light, transform, mut mesh_data) in query.iter_mut() {
             let center: Vec2 = transform.translation.xy();
             let vis_polygon = level::get_visibility_polygon(&mut level_geo, center);
-            if let Some(mesh) = meshes.get_mut(mesh_handle.id) {
-                build_mesh_for_vis_poly(&vis_polygon, mesh, center, transform.translation.z, light.color, light.reach);
-                light.mesh_built = true;
-            }
+            build_mesh_for_vis_poly(&vis_polygon, &mut mesh_data, center, transform.translation.z, light.color, light.reach);
+            light.mesh_built = true;
         }
     }
 }
 
+fn circle_intersect_rect(r: f32, center: Vec2, corner_a: Vec2, corner_b: Vec2) -> bool{
+    let closest_point_to_circle_in_rect = Vec2::new(
+        corner_a.x.max(corner_b.x.min(center.x)),
+        corner_a.y.max(corner_b.y.min(center.y)),
+    );
+    let dist_sqd = center.distance_squared(closest_point_to_circle_in_rect);
+    return dist_sqd < r.powi(2);
+}
+
 pub fn spotlight_mesh_builder(
-    mut query: Query<(&mut SpotLight, &GlobalTransform, &Parent, &mut Handle<Mesh>)>,
+    mut query: Query<(&mut SpotLight, &GlobalTransform, &Parent, &mut LightMeshData)>,
+    cam_query: Query<(&Transform, &OrthographicProjection), With<MainCam>>,
     parent_query: Query<&Facing, With<Children>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut level_query: Query<&mut level::LevelGeo>
+    level_query: Query<&level::LevelGeo>,
+    task_pool: Res<ComputeTaskPool>,
 ) {
-    if let Ok(mut level_geo) = level_query.single_mut() {
-        for (mut light, transform, parent, mesh_handle) in query.iter_mut() {
-            if let Ok(facing) = parent_query.get(parent.0) {
-                let center: Vec2 = transform.translation.xy() + facing.forward() * 20.0;
-                let vis_polygon = level::get_visibility_polygon(&mut level_geo, center);
-                if let Some(mesh) = meshes.get_mut(mesh_handle.id) {
-                    //build_mesh_for_vis_poly(&vis_polygon, mesh, center, transform.translation.z, light.color, light.reach);
-                    build_mesh_for_vis_poly_cone(&vis_polygon, mesh, center, transform.translation.z, light.color, light.reach, facing.angle, light.angle);
-                    light.mesh_built = true;
+    if let Ok((cam_transform, cam_ortho)) = cam_query.single() {
+        let cam_upper_left = cam_transform.translation.xy() + Vec2::new(cam_ortho.left, cam_ortho.top);
+        let cam_lower_right = cam_transform.translation.xy() + Vec2::new(cam_ortho.right, cam_ortho.bottom);
+        if let Ok(level_geo) = level_query.single() {
+            query.par_for_each_mut(&task_pool, 1, |(mut light, transform, parent, mut mesh_data)| {
+                if let Ok(facing) = parent_query.get(parent.0) {
+                    let center: Vec2 = transform.translation.xy() + facing.forward() * 20.0;
+                    // Check if there is any chance of it being visible at all
+                    if circle_intersect_rect(light.reach, center, cam_upper_left, cam_lower_right) {
+                        let vis_polygon = level::get_visibility_polygon(&level_geo, center);
+                        build_mesh_for_vis_poly_cone(&vis_polygon, &mut mesh_data, center, transform.translation.z, light.color, light.reach, facing.angle, light.angle);
+                        light.mesh_built = true;
+                    }
                 }
-            }
+            });
         }
     }
 }
+
 
 pub fn test_spin_system(
     mut query: Query<(&mut crate::ai::Facing, &TestSpin)>,
