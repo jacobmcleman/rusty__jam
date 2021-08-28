@@ -49,6 +49,7 @@ pub struct LevelTiles {
     height: usize,
     tile_size: f32,
     tiles: Vec<TileValue>,
+    pickups_total: i32,
     _next_level: String, // TODO: Add win condition so this can do something
 }
 
@@ -65,6 +66,8 @@ impl AssetLoader for LevelTiles {
             let mut index = 0;
             let mut next_level: String = "".to_string();
             let mut read_name = true;
+            let mut pickups_total = 0;
+
             for byte in bytes {
                 if read_name {
                     let character = *byte as char;
@@ -81,7 +84,11 @@ impl AssetLoader for LevelTiles {
                     match *byte as char {
                         ' ' => { tiles.push(TileValue::Empty); index += 1; },
                         '#' => { tiles.push(TileValue::Wall); index += 1; },
-                        '$' => { tiles.push(TileValue::Pickup); index += 1; },
+                        '$' => { 
+                            tiles.push(TileValue::Pickup); 
+                            index += 1; 
+                            pickups_total += 1;
+                        },
                         'V' => { tiles.push(TileValue::Player); index += 1; },
                         'X' => { tiles.push(TileValue::Enemy); index += 1; },
                         '\n' => {
@@ -93,7 +100,7 @@ impl AssetLoader for LevelTiles {
                 }
             }
 
-            load_context.set_default_asset(LoadedAsset::new(LevelTiles{width, height, tile_size: 50.0, tiles, _next_level: next_level}));
+            load_context.set_default_asset(LoadedAsset::new(LevelTiles{width, height, tile_size: 50.0, tiles, pickups_total, _next_level: next_level}));
             Ok(())
         })
     }
@@ -146,7 +153,7 @@ impl LevelTiles {
     }
 
     fn test_successor(&self, pos_test: &GridPos, successor_vec: &mut Vec<(GridPos, u32)>, cost: u32) -> bool{
-        if self.get_tile(pos_test) == TileValue::Empty {
+        if self.get_tile(pos_test) != TileValue::Wall {
             successor_vec.push((pos_test.clone(), cost));
             return true;
         }
@@ -251,6 +258,7 @@ pub fn level_builder_system(
     rapier_config: Res<RapierConfiguration>,
     asset_server: Res<AssetServer>,
     render_data: ResMut<crate::lighting::LightRenderData>,
+    mut score: ResMut<crate::gamestate::Score>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut level_query: Query<(&mut LevelState, &Handle<LevelTiles>, &mut LevelGeo)>
 ) {
@@ -259,6 +267,8 @@ pub fn level_builder_system(
 
         if let Some(level_data) = levels.get(level_data_handle){
             let mut level_polygons = Vec::<Polygon<f64>>::new();
+
+            score.max = level_data.pickups_total;
 
             let offset = Vec2::new((level_data.width / 2) as f32 * -level_data.tile_size, (level_data.height / 2) as f32 * -level_data.tile_size);
 
@@ -327,5 +337,5 @@ fn _gen_level_tiles(width: usize, height: usize) -> LevelTiles {
             );
         }
     }
-    LevelTiles { width, height, tile_size: 50.0, tiles, _next_level: "".to_string() }
+    LevelTiles { width, height, tile_size: 50.0, tiles, _next_level: "".to_string(), pickups_total: 0 }
 }

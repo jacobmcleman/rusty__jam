@@ -165,6 +165,7 @@ pub fn spawn_enemy(commands: &mut Commands,
     })
     .insert_bundle(ColliderBundle {
         position: [(pos.x / rapier_config.scale) + collider_size_x / 2.0, (pos.y / rapier_config.scale) + collider_size_y / 2.0].into(),
+        material: ColliderMaterial { friction: 0.0, restitution: 0.9, ..Default::default() },
         ..Default::default()
     })
     .insert(ColliderPositionSync::Discrete)

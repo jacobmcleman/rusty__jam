@@ -9,7 +9,8 @@ pub enum GameState {
 }
 
 pub struct Score {
-    pub value: i32
+    pub value: i32,
+    pub max: i32,
 }
 
 pub struct CurrentLevel {

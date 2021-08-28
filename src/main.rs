@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"]
 use bevy::{
     prelude::*, 
     window::WindowMode,
@@ -30,7 +31,7 @@ fn main() {
             ..Default::default()
         })
         .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
-        .insert_resource(gamestate::Score{value: 0})
+        .insert_resource(gamestate::Score{value: 0, max: 0})
         .insert_resource(gamestate::CurrentLevel{name: "game".to_string()})
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugins(DefaultPlugins)
@@ -100,7 +101,7 @@ fn startup_setup(
                         },
                     },
                     TextSection {
-                        value: "\n\nObjective:\nCollect as many coins as you can without being caught.".to_string(),
+                        value: "\n\nObjective:\nCollect as many of the dropped cards\nas you can without being caught.".to_string(),
                         style: TextStyle {
                             font: asset_server.load("fonts/Roboto-Regular.ttf"),
                             font_size: 40.0,
@@ -137,13 +138,19 @@ fn screen_text(
     diagnostics: Res<Diagnostics>,
     score: Res<Score>,
     mut query: Query<&mut Text, With<DiagText>>,
+    player_query: Query<&player::PlayerShooting>
 ) {
     if let Some(fps) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
         if let Some(average) = fps.average() {
-            for mut text in query.iter_mut() {
-                text.sections[1].value = format!("{}", score.value);
-                text.sections[3].value = format!("{:.2}", average);
+            if let Ok(player) = player_query.single() {
+                let bombs_text = (0..player.bombs).map(|_| "O").collect::<String>() + &(player.bombs..3).map(|_| "-").collect::<String>();
+                for mut text in query.iter_mut() {
+                    text.sections[1].value = format!("{}/{}", score.value, score.max);
+                    text.sections[3].value = bombs_text.clone();
+                    text.sections[5].value = format!("{:.1}", average);
+                }
             }
+            
         }
     };
 }
@@ -167,7 +174,7 @@ fn gameover_setup(
                             },
                         },
                         TextSection {
-                            value: format!("\nScore: {}", score.value),
+                            value: format!("\nCards Found: {}/{}", score.value, score.max),
                             style: TextStyle {
                                 font: asset_server.load("fonts/Roboto-Regular.ttf"),
                                 font_size: 60.0,
@@ -216,12 +223,16 @@ fn all_setup(
     rapier_config.gravity = Vector2::zeros();
 }
 
-fn setup_playing(mut commands: Commands, asset_server: Res<AssetServer>,) {
+fn setup_playing(
+    mut commands: Commands, 
+    asset_server: Res<AssetServer>, 
+) {
+    
     commands.spawn_bundle(TextBundle {
         text: Text {
             sections: vec![
                 TextSection {
-                    value: "Collected Count: ".to_string(),
+                    value: "Cards Collected: ".to_string(),
                     style: TextStyle {
                         font: asset_server.load("fonts/Roboto-Regular.ttf"),
                         font_size: 30.0,
@@ -230,6 +241,22 @@ fn setup_playing(mut commands: Commands, asset_server: Res<AssetServer>,) {
                 },
                 TextSection {
                     value: "".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                        font_size: 30.0,
+                        color: Color::rgb(1.0, 0.7, 0.1),
+                    },
+                },
+                TextSection {
+                    value: "\nSmoke Bombs: ".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                        font_size: 30.0,
+                        color: Color::rgb(1.0, 0.7, 0.1),
+                    },
+                },
+                TextSection {
+                    value: "ooo".to_string(),
                     style: TextStyle {
                         font: asset_server.load("fonts/Roboto-Regular.ttf"),
                         font_size: 30.0,
@@ -240,7 +267,7 @@ fn setup_playing(mut commands: Commands, asset_server: Res<AssetServer>,) {
                     value: "\nAverage FPS: ".to_string(),
                     style: TextStyle {
                         font: asset_server.load("fonts/Roboto-Regular.ttf"),
-                        font_size: 20.0,
+                        font_size: 10.0,
                         color: Color::rgb(1.0, 1.0, 1.0),
                     },
                 },
@@ -248,7 +275,7 @@ fn setup_playing(mut commands: Commands, asset_server: Res<AssetServer>,) {
                     value: "".to_string(),
                     style: TextStyle {
                         font: asset_server.load("fonts/Roboto-Regular.ttf"),
-                        font_size: 20.0,
+                        font_size: 10.0,
                         color: Color::rgb(1.0, 1.0, 1.0),
                     },
                 },

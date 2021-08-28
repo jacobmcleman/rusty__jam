@@ -12,6 +12,8 @@ pub struct PlayerMovement {
 
 pub struct PlayerShooting {
     smoke_mat: Handle<ColorMaterial>,
+    pub bombs: u32,
+    cooldown: f32,
 }
 
 pub struct CamFollow {
@@ -68,14 +70,16 @@ pub fn player_movement_system(
 pub fn player_shoot_system(
     keyboard_input: Res<Input<KeyCode>>,
     mut commands: Commands,
+    time: Res<Time>,
     rapier_config: Res<RapierConfiguration>,
-    query: Query<(&PlayerShooting, &Transform)>
+    mut query: Query<(&mut PlayerShooting, &Transform)>
 ) {
-    if let Ok((player, transform)) = query.single() {
-        if keyboard_input.just_pressed(KeyCode::Space) {
-            println!("player position: {}", transform.translation);
-
+    if let Ok((mut player, transform)) = query.single_mut() {
+        if player.bombs > 0 && keyboard_input.just_pressed(KeyCode::Space) {
             let block_size = 100.0;
+
+            player.cooldown = 0.0;
+            player.bombs -= 1;
 
             commands.spawn()
                 .insert(particles::BurstParticleEmitter {
@@ -99,8 +103,17 @@ pub fn player_shoot_system(
                     collider_type: ColliderType::Sensor,
                     ..Default::default()
                 })
-                ;
-            };
+            ;
+        }
+
+        if player.bombs < 3 {
+            player.cooldown += time.delta_seconds();
+
+            if player.cooldown > 7.0 {
+                player.bombs += 1;
+                player.cooldown = 0.0;
+            }
+        }
     }
 }
 
@@ -159,7 +172,7 @@ pub fn spawn_player(
     })
     .insert(ColliderPositionSync::Discrete)
     .insert(PlayerMovement {speed: 200.0})
-    .insert(PlayerShooting {smoke_mat: materials.add(smoke_texture_handle.into())})
+    .insert(PlayerShooting {smoke_mat: materials.add(smoke_texture_handle.into()), bombs: 3 ,cooldown: 0.})
     .insert(crate::lighting::DynamicLightBlocker{size: 20.0})
     .insert( CamFollow{position: Vec2::default()})
     ;
