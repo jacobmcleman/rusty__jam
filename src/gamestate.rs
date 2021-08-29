@@ -9,7 +9,12 @@ pub enum GameState {
 }
 
 pub struct Score {
-    pub value: i32
+    pub value: i32,
+    pub max: i32,
+}
+
+pub struct CurrentLevel {
+    pub name: String,
 }
 
 pub fn startgame_keyboard(mut state: ResMut<State<GameState>>, mut exit: EventWriter<AppExit>, keyboard_input: Res<Input<KeyCode>>) {

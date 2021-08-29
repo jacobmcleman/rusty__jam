@@ -13,10 +13,10 @@ pub fn spawn_pickup(
     rapier_scale: f32,
     asset_server: &Res<AssetServer>,
 ) {
-    let circle_texture_handle: Handle<Texture> = asset_server.load("sprites/circle.png");
+    let circle_texture_handle: Handle<Texture> = asset_server.load("sprites/card.png");
 
-    let sprite_size_x = 20.0;
-    let sprite_size_y = 20.0;
+    let sprite_size_x = 40.0;
+    let sprite_size_y = 40.0;
 
     let collider_size = sprite_size_x / rapier_scale;
 

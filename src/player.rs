@@ -12,6 +12,8 @@ pub struct PlayerMovement {
 
 pub struct PlayerShooting {
     smoke_mat: Handle<ColorMaterial>,
+    pub bombs: u32,
+    cooldown: f32,
 }
 
 pub struct CamFollow {
@@ -68,14 +70,16 @@ pub fn player_movement_system(
 pub fn player_shoot_system(
     keyboard_input: Res<Input<KeyCode>>,
     mut commands: Commands,
+    time: Res<Time>,
     rapier_config: Res<RapierConfiguration>,
-    query: Query<(&PlayerShooting, &Transform)>
+    mut query: Query<(&mut PlayerShooting, &Transform)>
 ) {
-    if let Ok((player, transform)) = query.single() {
-        if keyboard_input.just_pressed(KeyCode::Space) {
-            println!("player position: {}", transform.translation);
-
+    if let Ok((mut player, transform)) = query.single_mut() {
+        if player.bombs > 0 && keyboard_input.just_pressed(KeyCode::Space) {
             let block_size = 100.0;
+
+            player.cooldown = 0.0;
+            player.bombs -= 1;
 
             commands.spawn()
                 .insert(particles::BurstParticleEmitter {
@@ -86,7 +90,7 @@ pub fn player_shoot_system(
                     speed_min: 20.0,
                     speed_max: 250.0,
                     particle_drag: 4.0,
-                    particle_size: Vec2::new(20.0, 20.0),
+                    particle_size: Vec2::new(30.0, 30.0),
                     lifetime_min: 8.0,
                     lifetime_max: 15.0,
                     material: player.smoke_mat.clone(),
@@ -99,8 +103,17 @@ pub fn player_shoot_system(
                     collider_type: ColliderType::Sensor,
                     ..Default::default()
                 })
-                ;
-            };
+            ;
+        }
+
+        if player.bombs < 3 {
+            player.cooldown += time.delta_seconds();
+
+            if player.cooldown > 7.0 {
+                player.bombs += 1;
+                player.cooldown = 0.0;
+            }
+        }
     }
 }
 
@@ -133,6 +146,7 @@ pub fn spawn_player(
 ) {
     // Load sprite
     let circle_texture_handle: Handle<Texture> = asset_server.load("sprites/circle.png");
+    let smoke_texture_handle: Handle<Texture> = asset_server.load("sprites/smoke.png");
 
     let sprite_size_x = 40.0;
     let sprite_size_y = 40.0;
@@ -158,7 +172,7 @@ pub fn spawn_player(
     })
     .insert(ColliderPositionSync::Discrete)
     .insert(PlayerMovement {speed: 200.0})
-    .insert(PlayerShooting {smoke_mat: materials.add(Color::rgb(0.0, 0.3, 0.5).into())})
+    .insert(PlayerShooting {smoke_mat: materials.add(smoke_texture_handle.into()), bombs: 3 ,cooldown: 0.})
     .insert(crate::lighting::DynamicLightBlocker{size: 20.0})
     .insert( CamFollow{position: Vec2::default()})
     ;
@@ -174,6 +188,8 @@ fn process_collision_events(
     player_query: Query<Entity, With<PlayerMovement>>,
     enemy_query: Query<Entity, With<crate::ai::AiPerception>>,
     pickup_query: Query<(Entity, &Pickup), With<Pickup>>,
+    asset_server: Res<AssetServer>, 
+    audio: Res<Audio>
 ) {
     for intersection_event in intersection_events.iter() {
         if player_query.get(intersection_event.collider1.entity()).is_ok() {
@@ -186,6 +202,9 @@ fn process_collision_events(
             if let Ok(pair) = pickup_query.get(intersection_event.collider1.entity()) {
                 score.value += pair.1.value;
                 commands.entity(pair.0).despawn_recursive();
+
+                let fx = asset_server.load("audio/sfx/Stutter_Beep.mp3");
+                audio.play(fx);
             }
         }
     }
@@ -201,6 +220,8 @@ fn process_collision_events(
                 let is_enemy_involved = contact1_enemy || contact2_enemy;
                 if is_enemy_involved && is_player_involved {
                     state.set(GameState::GameOver).unwrap();
+                    let fx = asset_server.load("audio/sfx/deathSound.mp3");
+                    audio.play(fx);
                     return;
                 }
             }

@@ -83,12 +83,12 @@ pub struct AiPerception {
 }
 
 impl AiPerception {
-    pub fn new(visual_range: f32, vision_cone_angle: f32) -> AiPerception {
+    pub fn new(visual_range: f32, vision_cone_angle: f32, home_point: Vec2) -> AiPerception {
         AiPerception {
             visual_range,
             vision_cone_angle,
             can_see_target: false,
-            target_position: Vec2::new(0.0, 0.0),
+            target_position: home_point,
             target_direction: 0.0,
             last_seen_time: 0.0,
         }
@@ -104,11 +104,11 @@ pub struct AiMovement {
 }
 
 impl AiMovement {
-    pub fn new(move_speed: f32) -> AiMovement {
+    pub fn new(move_speed: f32, start_dest: Vec2) -> AiMovement {
         AiMovement {
             move_speed,
             move_to_target: true,
-            target_position: Vec2::new(0.0, 0.0),
+            target_position: start_dest,
             current_path: vec![],
             path_index: 0,
         }
@@ -165,12 +165,13 @@ pub fn spawn_enemy(commands: &mut Commands,
     })
     .insert_bundle(ColliderBundle {
         position: [(pos.x / rapier_config.scale) + collider_size_x / 2.0, (pos.y / rapier_config.scale) + collider_size_y / 2.0].into(),
+        material: ColliderMaterial { friction: 0.0, restitution: 0.9, ..Default::default() },
         ..Default::default()
     })
     .insert(ColliderPositionSync::Discrete)
     .insert(Facing::new(std::f32::consts::FRAC_PI_2))
-    .insert(AiPerception::new(500.0, f32::to_radians(25.0)))
-    .insert(AiMovement::new(150.0))
+    .insert(AiPerception::new(500.0, f32::to_radians(25.0), pos))
+    .insert(AiMovement::new(150.0, pos))
     .insert(AiChaseBehavior{})
     .insert(AiPerceptionDebugIndicator{})
     .insert(crate::lighting::DynamicLightBlocker{size: 25.0})
@@ -187,6 +188,7 @@ pub fn spawn_enemy(commands: &mut Commands,
         ..Default::default()
     })
     .insert(lighting::SpotLight::new(f32::to_radians(25.0), Color::RED, 500.0))
+    .insert(lighting::LightMeshData::default())
     .id();
 
     commands.entity(test_enemy).push_children(&[vision_spotlight]);
@@ -226,6 +228,7 @@ pub fn ai_perception_system (
                 };
                 let filter: Option<&dyn Fn(ColliderHandle) -> bool> = Some(&filter_func);
 
+                
                 if let Some((handle, toi)) = query_pipeline.cast_ray(
                     &collider_set, &ray, max_toi, solid, groups, filter
                 ) {
@@ -261,7 +264,6 @@ pub fn ai_movement_system(
     mut query: Query<(&mut AiMovement, &mut RigidBodyVelocity, &mut Facing, &Transform)>,
     level_query: Query<&Handle<level::LevelTiles>,>,
 ) {
-    
     if let Ok(level_handle) = level_query.single() {
         if let Some(level) = levels.get(level_handle){
             query.par_for_each_mut(&task_pool, 1, |(mut mover, mut rb_vel, mut facing, transform)| {
@@ -343,8 +345,8 @@ pub fn ai_perception_debug_system (
     mut query: Query<(&AiPerception, &AiPerceptionDebugIndicator, &mut Handle<ColorMaterial>)>,
     mut light_query: Query<(&Parent, &mut lighting::SpotLight)>
 ) {
-    let see_color =Color::rgb(1.0, 0.0, 0.0);
-    let cant_color = Color::rgb(0.0,1.0,0.0);
+    let see_color =Color::rgb(0.8,0.35,0.2);
+    let cant_color = Color::rgb(0.2,0.7,0.8);
 
     for (perciever, _indicator, mat_handle) in query.iter_mut() {
         if let Some(mut color_mat) = materials.get_mut(mat_handle.id) {
