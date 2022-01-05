@@ -189,6 +189,7 @@ pub fn spawn_enemy(commands: &mut Commands,
     })
     .insert(lighting::SpotLight::new(f32::to_radians(25.0), Color::RED, 500.0))
     .insert(lighting::LightMeshData::default())
+    .insert(crate::visibility::VisChecker{radius: 250.0, visible: false})
     .id();
 
     commands.entity(test_enemy).push_children(&[vision_spotlight]);

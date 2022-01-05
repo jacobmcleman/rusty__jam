@@ -14,3 +14,6 @@ geo-visibility = { git = 'https://github.com/lelongg/geo-visibility', branch = '
 geo-clipper = "0.7"
 pathfinding = "2.2.1"
 anyhow = "1.0.43"
+
+[profile.release]
+debug = true

@@ -14,6 +14,7 @@ mod ai;
 mod lighting;
 mod gamestate;
 mod pickup;
+mod visibility;
 
 use gamestate::{GameState, Score};
 
@@ -33,9 +34,12 @@ fn main() {
         .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
         .insert_resource(gamestate::Score{value: 0, max: 0})
         .insert_resource(gamestate::CurrentLevel{name: "game".to_string()})
+        .insert_resource(gamestate::PerfDebug{spotlight_updates: 0})
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugins(DefaultPlugins)
         .add_state(GameState::Startup)
+        .add_system(visibility::vis_checking_system.system())
+        .add_system(visibility::vis_debug_system.system())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(player::PlayerPlugin)
         .add_plugin(level::LevelPlugin)
@@ -137,6 +141,7 @@ struct Preserve;
 fn screen_text(
     diagnostics: Res<Diagnostics>,
     score: Res<Score>,
+    mut perf_debug: ResMut<gamestate::PerfDebug>,
     mut query: Query<&mut Text, With<DiagText>>,
     player_query: Query<&player::PlayerShooting>
 ) {
@@ -148,11 +153,14 @@ fn screen_text(
                     text.sections[1].value = format!("{}/{}", score.value, score.max);
                     text.sections[3].value = bombs_text.clone();
                     text.sections[5].value = format!("{:.1}", average);
+                    text.sections[7].value = format!("{:.1}", perf_debug.spotlight_updates);
                 }
             }
             
         }
     };
+
+    perf_debug.spotlight_updates = 0;
 }
 
 
@@ -265,6 +273,22 @@ fn setup_playing(
                 },
                 TextSection {
                     value: "\nAverage FPS: ".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                        font_size: 10.0,
+                        color: Color::rgb(1.0, 1.0, 1.0),
+                    },
+                },
+                TextSection {
+                    value: "".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                        font_size: 10.0,
+                        color: Color::rgb(1.0, 1.0, 1.0),
+                    },
+                },
+                TextSection {
+                    value: "\nLight Updates: ".to_string(),
                     style: TextStyle {
                         font: asset_server.load("fonts/Roboto-Regular.ttf"),
                         font_size: 10.0,
