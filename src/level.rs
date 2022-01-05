@@ -263,14 +263,21 @@ struct Wall {
 
 impl Wall {
     fn get_center(&self, tile_size: f32) -> Vec2 {
-        let top_left = self.top_left.as_f32() * tile_size;
-        let bottom_right = self.bottom_right.as_f32() * tile_size;
+        // Move out bottom right corner by 1 to include bottom right tile
+        let top = i32::max(self.top_left.y, self.bottom_right.y);
+        let bottom = i32::min(self.top_left.y, self.bottom_right.y);
+        let left = i32::min(self.top_left.x, self.bottom_right.x);
+        let right = i32::max(self.top_left.x, self.bottom_right.x);
+
+        let top_left = Vec2::new(left as f32, top as f32) * tile_size;
+        let bottom_right = Vec2::new(right as f32, bottom as f32) * tile_size;
         return 0.5 * (top_left + bottom_right);
     }
 
     fn get_size(&self, tile_size: f32) -> Vec2 {
-        let tile_height = (self.top_left.y - self.bottom_right.y).abs();
-        let tile_width = (self.top_left.x - self.bottom_right.x).abs();
+        // Add 1 for inclusive range
+        let tile_height = (self.top_left.y - self.bottom_right.y).abs() + 1;
+        let tile_width = (self.top_left.x - self.bottom_right.x).abs() + 1;
         return Vec2::new(tile_width as f32 * tile_size, tile_height as f32 * tile_size);
     }
 }
@@ -379,19 +386,23 @@ pub fn level_builder_system(
 
             let offset = Vec2::new((level_data.width / 2) as f32 * -level_data.tile_size, (level_data.height / 2) as f32 * -level_data.tile_size);
 
+            let wall_list = tile_vector_to_wall_set(&level_data.tiles, level_data.width, level_data.height);
+
+            for wall in wall_list {
+                create_static_box(
+                    &mut commands,
+                    &mut materials,
+                    &rapier_config,
+                    &mut level_polygons,
+                    wall.get_center(level_data.tile_size) + offset,
+                    wall.get_size(level_data.tile_size)
+                );
+            }
+
             for y in 0..level_data.height {
                 for x in 0..level_data.width {
                     let tile_pos = offset + Vec2::new(level_data.tile_size * x as f32, level_data.tile_size * y as f32);
-                    if matches!(level_data.tiles[x + (y * level_data.width)], TileValue::Wall) {
-                        create_static_box(
-                            &mut commands, 
-                            &mut materials, 
-                            &rapier_config, 
-                            &mut level_polygons,
-                            tile_pos, 
-                            Vec2::new(level_data.tile_size, level_data.tile_size));
-                    }
-                    else if matches!(level_data.tiles[x + (y * level_data.width)], TileValue::Pickup) {
+                    if matches!(level_data.tiles[x + (y * level_data.width)], TileValue::Pickup) {
                         crate::pickup::spawn_pickup(tile_pos,
                             &mut commands,
                             &mut materials,
@@ -453,29 +464,29 @@ mod tests {
 
     #[test]
     fn test_wall_rect_single_tile() {
-        let wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(1, 1)};
-        assert_eq!(wall.get_center(10.0), Vec2::new(5.0, 5.0));
+        let wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(0, 0)};
+        assert_eq!(wall.get_center(10.0), Vec2::new(0.0, 0.0));
         assert_eq!(wall.get_size(10.0), Vec2::new(10.0, 10.0));
     }
 
     #[test]
     fn test_wall_rect_long_x() {
-        let wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(10, 1)};
-        assert_eq!(wall.get_center(10.0), Vec2::new(50.0, 5.0));
+        let wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(9, 0)};
+        assert_eq!(wall.get_center(10.0), Vec2::new(45.0, 0.0));
         assert_eq!(wall.get_size(10.0), Vec2::new(100.0, 10.0));
     }
 
     #[test]
     fn test_wall_rect_long_y() {
-        let wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(1, 10)};
-        assert_eq!(wall.get_center(10.0), Vec2::new(5.0, 50.0));
+        let wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(0, 9)};
+        assert_eq!(wall.get_center(10.0), Vec2::new(0.0, 45.0));
         assert_eq!(wall.get_size(10.0), Vec2::new(10.0, 100.0));
     }
 
     #[test]
     fn test_wall_rect_square() {
-        let wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(10, 10)};
-        assert_eq!(wall.get_center(10.0), Vec2::new(50.0, 50.0));
+        let wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(9, 9)};
+        assert_eq!(wall.get_center(10.0), Vec2::new(45.0, 45.0));
         assert_eq!(wall.get_size(10.0), Vec2::new(100.0, 100.0));
     }
 
@@ -560,8 +571,8 @@ mod tests {
     #[test]
     fn test_takes_longest_wall_y() {
         let mut test_grid = vec![   true,  true, false, 
-                                true,  false, false,
-                                true,  false, false,
+                                    true,  false, false,
+                                    true,  false, false,
                             ];
         let expected_grid = vec![   false, true,  false, 
                                     false, false, false,
@@ -577,7 +588,7 @@ mod tests {
 
     #[test]
     fn test_makes_walls_steps() {
-        let mut test_grid = vec![   TileValue::Wall,  TileValue::Empty, TileValue::Empty, 
+        let test_grid = vec![   TileValue::Wall,  TileValue::Empty, TileValue::Empty, 
                                     TileValue::Wall,  TileValue::Wall, TileValue::Empty,
                                     TileValue::Wall,  TileValue::Wall, TileValue::Wall,
                             ];
@@ -587,38 +598,42 @@ mod tests {
             Wall{top_left: IVec2::new(2, 2), bottom_right: IVec2::new(2, 2)},   
         ];
 
-        let result_walls = tile_vector_to_wall_set(&mut test_grid, 3, 3);
+        let result_walls = tile_vector_to_wall_set(&test_grid, 3, 3);
         
         assert_eq!(result_walls.len(), 3, "3 walls expected");
 
         for i in 0..3 {
             assert_eq!(result_walls[i], expected_walls[i], "Wall {} matches", i);
         }
+
+        assert_eq!(result_walls[0].get_center(10.0), Vec2::new(0.0, 10.0));
+        assert_eq!(result_walls[1].get_center(10.0), Vec2::new(10.0, 15.0));
+        assert_eq!(result_walls[2].get_center(10.0), Vec2::new(20.0, 20.0));
     }
 
     #[test]
     fn test_makes_walls_empty() {
-        let mut test_grid = vec![   TileValue::Empty,  TileValue::Empty, TileValue::Empty, 
-                                    TileValue::Empty,  TileValue::Empty, TileValue::Empty,
-                                    TileValue::Empty,  TileValue::Empty, TileValue::Empty,
+        let test_grid = vec![   TileValue::Empty,  TileValue::Empty, TileValue::Empty, 
+                                TileValue::Empty,  TileValue::Empty, TileValue::Empty,
+                                TileValue::Empty,  TileValue::Empty, TileValue::Empty,
                             ];
-        let result_walls = tile_vector_to_wall_set(&mut test_grid, 3, 3);
+        let result_walls = tile_vector_to_wall_set(&test_grid, 3, 3);
         
         assert_eq!(result_walls.len(), 0, "Empty grid should produce no walls");
     }
 
     #[test]
     fn test_makes_walls_x() {
-        let mut test_grid = vec![   TileValue::Empty,  TileValue::Wall, TileValue::Empty, 
-                                    TileValue::Wall,   TileValue::Wall, TileValue::Wall,
-                                    TileValue::Empty,  TileValue::Wall, TileValue::Empty,
+        let test_grid = vec![   TileValue::Empty,  TileValue::Wall, TileValue::Empty, 
+                                TileValue::Wall,   TileValue::Wall, TileValue::Wall,
+                                TileValue::Empty,  TileValue::Wall, TileValue::Empty,
                             ];
         let expected_walls = vec! [
             Wall{top_left: IVec2::new(0, 1), bottom_right: IVec2::new(2, 1)},
             Wall{top_left: IVec2::new(1, 0), bottom_right: IVec2::new(1, 0)},   
             Wall{top_left: IVec2::new(1, 2), bottom_right: IVec2::new(1, 2)},   
         ];
-        let result_walls = tile_vector_to_wall_set(&mut test_grid, 3, 3);
+        let result_walls = tile_vector_to_wall_set(&test_grid, 3, 3);
         
         assert_eq!(result_walls.len(), 3, "3 walls expected");
 
