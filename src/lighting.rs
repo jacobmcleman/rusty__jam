@@ -4,6 +4,7 @@ use geo::{Polygon,};
 
 use crate::{level};
 use crate::ai::Facing;
+use crate::visibility::VisChecker;
 
 pub struct LightingPlugin;
 
@@ -58,6 +59,7 @@ pub struct LightMeshData {
     v_lightfacing: Vec<f32>,
     v_lightangle: Vec<f32>,
     indices: Vec<u32>,
+    refresh_data: bool,
 }
 
 impl SpotLight {
@@ -138,18 +140,24 @@ fn build_mesh_for_vis_poly_cone(poly: &geo::Polygon<f64>, mesh: &mut LightMeshDa
 }
 
 pub fn light_mesh_applicator(
-    mut query: Query<(&LightMeshData, &Handle<Mesh>)>,
+    mut query: Query<(&mut LightMeshData, &Handle<Mesh>)>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut perf_debug: ResMut<crate::gamestate::PerfDebug>,
 ) {
-    for (mesh_data, mesh_handle) in query.iter_mut() {
+    for (mut mesh_data, mesh_handle) in query.iter_mut() {
         if let Some(mesh) = meshes.get_mut(mesh_handle.id) {
-            mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, mesh_data.v_pos.clone());
-            mesh.set_attribute("light_Color", mesh_data.v_color.clone());
-            mesh.set_attribute("light_Position", mesh_data.v_lightpos.clone());
-            mesh.set_attribute("light_Power", mesh_data.v_lightpower.clone());
-            mesh.set_attribute("light_Facing", mesh_data.v_lightfacing.clone());
-            mesh.set_attribute("light_Angle", mesh_data.v_lightangle.clone());
-            mesh.set_indices(Some(bevy::render::mesh::Indices::U32(mesh_data.indices.clone())));
+            if mesh_data.refresh_data {
+                mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, mesh_data.v_pos.clone());
+                mesh.set_attribute("light_Color", mesh_data.v_color.clone());
+                mesh.set_attribute("light_Position", mesh_data.v_lightpos.clone());
+                mesh.set_attribute("light_Power", mesh_data.v_lightpower.clone());
+                mesh.set_attribute("light_Facing", mesh_data.v_lightfacing.clone());
+                mesh.set_attribute("light_Angle", mesh_data.v_lightangle.clone());
+                mesh.set_indices(Some(bevy::render::mesh::Indices::U32(mesh_data.indices.clone())));
+                mesh_data.refresh_data = false;
+
+                perf_debug.spotlight_updates += 1;
+            }
         }
     }
 }
@@ -164,32 +172,27 @@ pub fn point_light_mesh_builder(
             let vis_polygon = level::get_visibility_polygon(&mut level_geo, center);
             build_mesh_for_vis_poly(&vis_polygon, &mut mesh_data, center, transform.translation.z, light.color, light.reach);
             light.mesh_built = true;
+            mesh_data.refresh_data = true;
         }
     }
 }
 
-fn _circle_intersect_rect(r: f32, center: Vec2, corner_a: Vec2, corner_b: Vec2) -> bool{
-    let closest_point_to_circle_in_rect = Vec2::new(
-        corner_a.x.max(corner_b.x.min(center.x)),
-        corner_a.y.max(corner_b.y.min(center.y)),
-    );
-    let dist_sqd = center.distance_squared(closest_point_to_circle_in_rect);
-    return dist_sqd < r.powi(2);
-}
-
 pub fn spotlight_mesh_builder(
-    mut query: Query<(&mut SpotLight, &GlobalTransform, &Parent, &mut LightMeshData)>,
+    mut query: Query<(&mut SpotLight, &GlobalTransform, &Parent, &mut LightMeshData, &VisChecker)>,
     parent_query: Query<&Facing, With<Children>>,
     level_query: Query<&level::LevelGeo>,
     task_pool: Res<ComputeTaskPool>,
 ) {
     if let Ok(level_geo) = level_query.single() {
-        query.par_for_each_mut(&task_pool, 1, |(mut light, transform, parent, mut mesh_data)| {
+        query.par_for_each_mut(&task_pool, 1, |(mut light, transform, parent, mut mesh_data, vis_check)| {
             if let Ok(facing) = parent_query.get(parent.0) {
-                let center: Vec2 = transform.translation.xy() + facing.forward() * 20.0;
-                let vis_polygon = level::get_visibility_polygon(&level_geo, center);
-                build_mesh_for_vis_poly_cone(&vis_polygon, &mut mesh_data, center, transform.translation.z, light.color, light.reach, facing.angle, light.angle);
-                light.mesh_built = true;
+                if vis_check.visible {
+                    let center: Vec2 = transform.translation.xy() + facing.forward() * 20.0;
+                    let vis_polygon = level::get_visibility_polygon(&level_geo, center);
+                    build_mesh_for_vis_poly_cone(&vis_polygon, &mut mesh_data, center, transform.translation.z, light.color, light.reach, facing.angle, light.angle);
+                    light.mesh_built = true;
+                    mesh_data.refresh_data = true;
+                }
             }
         });
     }

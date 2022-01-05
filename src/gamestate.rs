@@ -17,6 +17,10 @@ pub struct CurrentLevel {
     pub name: String,
 }
 
+pub struct PerfDebug {
+    pub spotlight_updates: i32,
+}
+
 pub fn startgame_keyboard(mut state: ResMut<State<GameState>>, mut exit: EventWriter<AppExit>, keyboard_input: Res<Input<KeyCode>>) {
     if keyboard_input.just_pressed(KeyCode::Space) {
         state.set(GameState::Playing).unwrap();

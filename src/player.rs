@@ -176,6 +176,15 @@ pub fn spawn_player(
     .insert(crate::lighting::DynamicLightBlocker{size: 20.0})
     .insert( CamFollow{position: Vec2::default()})
     ;
+
+    
+    commands
+    .spawn()
+    .insert(Transform::from_xyz(position.x, position.y, 0.0))
+    .insert(crate::visibility::VisChecker{radius: 100.0, visible: true})
+    //.insert(crate::visibility::VisDebug)
+    ;
+    
 }
 
 
