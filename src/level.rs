@@ -359,8 +359,8 @@ fn create_static_box(commands: &mut Commands,
     })
     .insert(ColliderPositionSync::Discrete);
     
-    let min_point = position + (-0.5 * size);
-    let max_point = position + (0.5 * size);
+    let min_point = position + (-0.5 * size) * 0.999;
+    let max_point = position + (0.5 * size) * 0.999;
 
     level_geo.push(geo::Rect::new(bevy_vec2_to_geo_coord(min_point), bevy_vec2_to_geo_coord(max_point)).into());
 }
