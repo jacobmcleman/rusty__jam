@@ -197,6 +197,42 @@ fn count_wall_continues_x(tiles: &Vec<bool>, width: usize, _height: usize, start
     return cur_length;
 }
 
+fn count_x_wall_thickness(tiles: &Vec<bool>, width: usize, height: usize, start: &IVec2, length: usize) -> usize {
+    let mut solid = true;
+    let mut y = start.y as usize + 1;
+    while y < height && solid {
+        let mut x = start.x as usize;
+        while x < length && solid {
+            let index = get_tile_index(x, y, width);
+            solid = solid && tiles[index];
+            x += 1;
+        }
+
+        if solid {
+            y += 1;
+        }
+    }
+    return y - start.y as usize;
+}
+
+fn count_y_wall_thickness(tiles: &Vec<bool>, width: usize, _height: usize, start: &IVec2, length: usize) -> usize {
+    let mut solid = true;
+    let mut x = start.x as usize + 1;
+    while x < width && solid {
+        let mut y = start.y as usize;
+        while y < length && solid {
+            let index = get_tile_index(x, y, width);
+            solid = solid && tiles[index];
+            y += 1;
+        }
+
+        if solid {
+            x += 1;
+        }
+    }
+    return x - start.x as usize;
+}
+
 fn count_wall_continues_y(tiles: &Vec<bool>, width: usize, height: usize, start: &IVec2) -> usize {
     let x = start.x as usize;
     let mut y = start.y as usize;
@@ -216,22 +252,29 @@ fn take_longest_wall(tiles: &mut Vec<bool>, width: usize, height: usize, root: &
     let x_wall_length = count_wall_continues_x(&tiles, width, height, &root);
     let y_wall_length = count_wall_continues_y(&tiles, width, height, &root);
 
+    let mut x_size = 1 as usize;
+    let mut y_size = 1 as usize;
+
     if x_wall_length > y_wall_length {
-        let mut x = root.x as usize;
-        while x < root.x as usize + x_wall_length {
-            tiles[get_tile_index(x, root.y as usize, width)] = false;
-            x += 1;
-        }
-        return Wall{top_left: root.clone(), bottom_right: IVec2::new(x as i32 - 1 , root.y)};
+        x_size = x_wall_length;
+        y_size = count_x_wall_thickness(&tiles, width, height, &root, x_wall_length);
     }
     else {
-        let mut y = root.y as usize;
-        while y < root.y as usize + y_wall_length {
-            tiles[get_tile_index(root.x as usize, y, width)] = false;
-            y += 1;
-        }
-        return Wall{top_left: root.clone(), bottom_right: IVec2::new(root.x, y as i32 - 1)};
+        y_size = y_wall_length;
+        x_size = count_y_wall_thickness(&tiles, width, height, &root, y_wall_length);
     }
+
+    for y in 0..y_size as usize {
+        for x in 0..x_size as usize {
+            let index = get_tile_index(root.x as usize + x, root.y as usize + y, width);
+            tiles[index] = false;
+        }
+    }
+
+    return Wall{
+        top_left: root.clone(), 
+        bottom_right: root.clone() + IVec2::new(x_size as i32 - 1, y_size as i32 - 1)
+    };
 }
 
 fn tile_vector_to_wall_set(tiles: &Vec<TileValue>, width: usize, height: usize) -> Vec<Wall> {
@@ -583,6 +626,91 @@ mod tests {
         let result_wall = take_longest_wall(&mut test_grid, 3, 3, &IVec2::new(0, 0));
         assert_eq!(result_wall.top_left, expected_wall.top_left, "Return correct wall top left bound");
         assert_eq!(result_wall.bottom_right, expected_wall.bottom_right, "Return correct wall bottom right bound");
+        assert_eq!(test_grid, expected_grid, "Properly mutate grid");
+    }
+
+    #[test]
+    fn test_makes_square() {
+        let mut test_grid = vec![   true,  true, false, 
+                                    true,  true, false,
+                                    false, false, false,
+                            ];
+        let expected_grid = vec![   false, false, false, 
+                                    false, false, false,
+                                    false, false, false,
+                            ];
+        let expected_wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(1, 1)};
+
+        let result_wall = take_longest_wall(&mut test_grid, 3, 3, &IVec2::new(0, 0));
+        assert_eq!(result_wall, expected_wall, "Return correct wall");
+        assert_eq!(test_grid, expected_grid, "Properly mutate grid");
+    }
+
+    #[test]
+    fn test_makes_single() {
+        let mut test_grid = vec![   true,  false, false, 
+                                    false, false, false,
+                                    false, false, false,
+                            ];
+        let expected_grid = vec![   false, false, false, 
+                                    false, false, false,
+                                    false, false, false,
+                            ];
+        let expected_wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(0, 0)};
+
+        let result_wall = take_longest_wall(&mut test_grid, 3, 3, &IVec2::new(0, 0));
+        assert_eq!(result_wall, expected_wall, "Return correct wall");
+        assert_eq!(test_grid, expected_grid, "Properly mutate grid");
+    }
+
+    #[test]
+    fn test_makes_rect_x() {
+        let mut test_grid = vec![   true,  true, true, 
+                                    true,  true, true,
+                                    false, false, false,
+                            ];
+        let expected_grid = vec![   false, false, false, 
+                                    false, false, false,
+                                    false, false, false,
+                            ];
+        let expected_wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(2, 1)};
+
+        let result_wall = take_longest_wall(&mut test_grid, 3, 3, &IVec2::new(0, 0));
+        assert_eq!(result_wall, expected_wall, "Return correct wall");
+        assert_eq!(test_grid, expected_grid, "Properly mutate grid");
+    }
+
+    #[test]
+    fn test_makes_rect_y() {
+        let mut test_grid = vec![   true, true, false, 
+                                    true, true, false,
+                                    true, true, false,
+                            ];
+        let expected_grid = vec![   false, false, false, 
+                                    false, false, false,
+                                    false, false, false,
+                            ];
+        let expected_wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(1, 2)};
+
+        let result_wall = take_longest_wall(&mut test_grid, 3, 3, &IVec2::new(0, 0));
+        assert_eq!(result_wall, expected_wall, "Return correct wall");
+        assert_eq!(test_grid, expected_grid, "Properly mutate grid");
+    }
+
+    #[test]
+    fn test_makes_square_to_boundary() {
+        let mut test_grid = vec![   true, true, true, 
+                                    true, true, true,
+                                    true, true, true,
+                            ];
+        let expected_grid = vec![   false, false, false, 
+                                    false, false, false,
+                                    false, false, false,
+                            ];
+        let expected_wall = Wall{top_left: IVec2::new(0, 0), bottom_right: IVec2::new(2, 2)};
+
+        let result_wall = take_longest_wall(&mut test_grid, 3, 3, &IVec2::new(0, 0));
+        assert_eq!(result_wall, expected_wall, "Return correct wall");
         assert_eq!(test_grid, expected_grid, "Properly mutate grid");
     }
 

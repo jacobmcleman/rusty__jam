@@ -294,7 +294,7 @@ pub fn ai_movement_system(
                 let vec_to_target =  mover.target_position - transform.translation.xy();
                 let distance_to_target = vec_to_target.length();
     
-                if distance_to_target < 60.0 {
+                if distance_to_target < 20.0 {
                     mover.move_to_target = false;
                 }
                 else {
